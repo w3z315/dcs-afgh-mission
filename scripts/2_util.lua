@@ -11,3 +11,55 @@ function isAirbaseInZone(zone, coalition)
 
     return false
 end
+
+-- Function to combine the tables
+function combineTables(baseTable)
+    local combined = {}
+
+    for _, zone in pairs(baseTable) do
+        for _, value in ipairs(zone) do
+            table.insert(combined, value)
+        end
+    end
+
+    return combined
+end
+
+function filterTable(tbl, callback)
+    local filteredTable = {}
+    for _, value in ipairs(tbl) do
+        if callback(value) then
+            table.insert(filteredTable, value)
+        end
+    end
+
+    return filteredTable
+end
+
+function shuffleTable(t)
+    local shuffled = {}
+    local len = #t
+
+    for i = len, 1, -1 do
+        -- Get a random index between 1 and i
+        local rand = math.random(i)
+
+        -- Insert the element at the random index into the shuffled table
+        table.insert(shuffled, t[rand])
+
+        -- Remove the element from the original table to avoid duplicates
+        table.remove(t, rand)
+    end
+
+    return shuffled
+end
+
+-- Array map equivalent
+function mapTable(tbl, callback)
+    local mappedTable = {}
+    for _, value in ipairs(tbl) do
+        table.insert(mappedTable, callback(value))
+    end
+
+    return mappedTable
+end

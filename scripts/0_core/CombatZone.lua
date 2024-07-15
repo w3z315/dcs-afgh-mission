@@ -14,17 +14,22 @@ COMBAT_ZONE = {
     ClassName = "COMBAT_ZONE",
     Zone = nil,
     Polygon = nil,
+    Point = nil,
     MarkIds = {},
+    LineMarkIds = {},
     Name = "",
     Coalition = -2,
+    ZoneColor = {.35, .35, .35}
 }
 
 function COMBAT_ZONE:New(name, polygon, coalition_side)
     local self = BASE:Inherit(self, BASE:New())
+    self.Name = name
     self.Polygon = polygon
     self:DrawMarkings(polygon:GetCoordinates(), {.35,.35,.35})
     self.Zone = ZONE_POLYGON:NewFromPointsArray(name, polygon:GetPoints())
     self.Coalition = coalition_side or coalition.side.NEUTRAL
+    self.Point = polygon:GetCentroid()
     return self
 end
 
@@ -39,24 +44,43 @@ function COMBAT_ZONE:ClearMarkings()
     end
 end
 
-function COMBAT_ZONE:DrawMarkings(coordinates, color)
-    table.add(self.MarkIds, coordinates[1]:MarkupToAllFreeForm(coordinates, -1, color, 1, color, .25, 2, true))
+function COMBAT_ZONE:ClearLineMarkings()
+    for _, markId in ipairs(self.LineMarkIds) do
+        UTILS.RemoveMark(markId)
+    end
+end
+
+function COMBAT_ZONE:DrawMarkings(coordinates)
+    table.add(self.MarkIds, coordinates[1]:MarkupToAllFreeForm(coordinates, -1, self.ZoneColor, 1, self.ZoneColor, .25, 2, true))
+end
+
+function COMBAT_ZONE:AddToMarkingList(markId)
+    table.add(self.MarkIds, markId)
+end
+
+function COMBAT_ZONE:AddToLineMarkingList(markId)
+    table.add(self.LineMarkIds, markId)
 end
 
 function COMBAT_ZONE:Update()
-    local zoneColor = {.35, .35, .35}
-    self:SetCoalition(coalition.side.NEUTRAL)
+
+    if self.Coalition == coalition.side.BLUE then
+        self.ZoneColor = {0, 0, 1}
+    elseif self.Coalition == coalition.side.RED then
+        self.ZoneColor = {1, 0, 0}
+    end
 
     if isAirbaseInZone(self.Zone, coalition.side.BLUE) and self.Coalition ~= coalition.side.BLUE then
         self:SetCoalition(coalition.side.BLUE)
-        zoneColor = {0, 0, 1}
+        self.ZoneColor = {0, 0, 1}
     elseif isAirbaseInZone(self.Zone, coalition.side.RED) and self.Coalition ~= coalition.side.RED then
         self:SetCoalition(coalition.side.RED)
-        zoneColor = { 1, 0, 0 }
+        self.ZoneColor = { 1, 0, 0 }
     end
 
     self:ClearMarkings()
-    self:DrawMarkings(self.Polygon:GetCoordinates(), zoneColor)
+    self:ClearLineMarkings()
+    self:DrawMarkings(self.Polygon:GetCoordinates())
 
 
     if WZ_CONFIG.zone.markers.enable then
@@ -66,4 +90,9 @@ function COMBAT_ZONE:Update()
         centroidCoords:MarkToAll(self.Name, true)
     end
     return self
+end
+
+function COMBAT_ZONE:Destroy()
+    self.ClearMarkings()
+    self.ClearLineMarkings()
 end
