@@ -89,10 +89,13 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
             if table.contains_key(self.CapturableCombatZones, targetZoneKey) then
                 capturableZone = self.CapturableCombatZones[targetZoneKey]
             else
-                self.CapturableCombatZones[targetZoneKey] = ZONE_CAPTURE_COALITION:New(targetZone.Zone, targetZone.Coalition)
+                -- TODO: Update coalition and CombatZone coalitions with event
+                self.CapturableCombatZones[targetZoneKey] = ZONE_CAPTURE_COALITION:New(targetZone.Zone, targetZone.Coalition, {Unit.Category.AIRPLANE, Unit.Category.HELICOPTER, Unit.Category.GROUND_UNIT})
                 capturableZone = self.CapturableCombatZones[targetZoneKey]
+                capturableZone:SetCoalition(targetZone.Coalition):Guard(1)
+                capturableZone:Start(0, 15)
+                capturableZone:Mark()
             end
-            capturableZone:SetCoalition(targetZone.Coalition):Start(0, 15):Mark()
         end
 
         local neutralColor = { .35, .35, .35 }
@@ -228,6 +231,7 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
     end
     self:ProcessZonesForCoalition(coalition.side.RED, allZones)
     self:ProcessZonesForCoalition(coalition.side.BLUE, allZones)
+    self:ProcessZonesForCoalition(coalition.side.NEUTRAL, allZones)
     if WZ_CONFIG.debug then
         MESSAGE:New("Updated", 2, "DEBUG"):ToAll()
         MESSAGE:New(string.format("Capturable combat zones: %d", countTableEntries(self.CapturableCombatZones)), 2, "DEBUG"):ToAll()

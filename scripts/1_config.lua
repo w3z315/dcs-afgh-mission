@@ -16,7 +16,7 @@ if not WZ_CONFIG then
         gameplay = {
             enableExpandingZones = true, -- Automatically expand zones with some factors to make the mission quicker
             enableExpandingZoneTimer = true, -- Show a timer on the map that displays the time until the troops will capture adjacent zones
-            expandZonesEvery = 6, -- Auto expand every x seconds, default = 5min (300),
+            expandZonesEvery = 300, -- Auto expand every x seconds, default = 5min (300),
             winningSideProbability = 0.5, -- The probability the winning side automatically gets a new zone (0-1),
             updateZonesEvery = 3, -- How often (seconds) do we want to check the zones for updates (e.g. Coalition), default 3,
             restartAfterMissionEnds = false, -- Should the mission restart when someone won?
@@ -78,7 +78,11 @@ if not WZ_CONFIG then
                     name = "ZoneTemplate | Comms-1",
                     probability = 1.0
                 },
-                --"ZoneTemplate | FARP1",
+                {
+                    name = "ZoneTemplate | FARP1",
+                    probability = 1.0,
+                    isAirBase = true,
+                }
             }
         },
     }

@@ -111,6 +111,10 @@ function COMBAT_ZONE:SpawnGroups()
             local countryId = (self.Coalition == coalition.side.BLUE) and country.id.USA or country.id.RUSSIA
             local spawn = SPAWNSTATIC:NewFromStatic(staticName, countryId):InitNamePrefix(self.Name .. '_Statics')
             local spawnCoords = self.CentroidArea:GetRandomCoordinate():SetAltitude(1)
+            if staticSettings.isAirBase then
+                -- It's a FARP we need to register it
+                spawn:InitFARP()
+            end
             table.insert(self.SpawnedGroups, spawn:SpawnFromCoordinate(spawnCoords, 0))
         end
     end
