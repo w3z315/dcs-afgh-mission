@@ -101,20 +101,31 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                 capturableZone.stateMachine = self
                 capturableZone.targetZone = targetZone
 
-                function capturableZone:OnAfterAttack(from, event, to)
+                function capturableZone:OnEnterAttacked(from, event, to)
+                    local Coalition = self:GetCoalition()
+                    if WZ_CONFIG.debug then
+                        MESSAGE:New("OnEnterAttacked: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition , 5, "DEBUG"):ToAll()
+                    end
                     if from ~= to then
                         self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURING)
                     end
-                    self.targetZone:Update()
+                    --self.targetZone:Update()
                 end
-                function capturableZone:OnAfterGuard(from, event, to)
+                function capturableZone:OnEnterGuarded(from, event, to)
+                    local Coalition = self:GetCoalition()
+                    if WZ_CONFIG.debug then
+                        MESSAGE:New("OnEnterGuarded: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition , 5, "DEBUG"):ToAll()
+                    end
                     if from ~= to then
                         self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
                     end
-                    self.targetZone:Update()
+                    --self.targetZone:Update()
                 end
-                function capturableZone:OnAfterEmpty(from, event, to)
+                function capturableZone:OnEnterEmpty(from, event, to)
                     local Coalition = self:GetCoalition()
+                    if WZ_CONFIG.debug then
+                        MESSAGE:New("OnEnterEmpty: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition , 5, "DEBUG"):ToAll()
+                    end
 
                     if from ~= to then
                         if Coalition ~= coalition.side.NEUTRAL then
@@ -123,33 +134,36 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                             self.targetZone:SetStatus(COMBAT_ZONE_STATUS.NEUTRAL)
                         end
                     end
-
-                    self.targetZone:Update()
+                    --self.targetZone:Update()
                 end
-                function capturableZone:OnAfterCapture(from, event, to)
+                function capturableZone:OnEnterCaptured(from, event, to)
                     local Coalition = self:GetCoalition()
                     if Coalition ~= self.targetZone.Coalition then
                         self.targetZone:SetCoalition(Coalition)
+                        if WZ_CONFIG.debug then
+                            MESSAGE:New("OnEnterCaptured: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition , 5, "DEBUG"):ToAll()
+                        end
+
+                        self.targetZone.SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
+
+                        if Coalition == coalition.side.BLUE then
+                            self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "%s is captured by the USA, we lost it!", self:GetZoneName() ), MESSAGE.Type.Information )
+                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "We captured %s, Excellent job!", self:GetZoneName() ), MESSAGE.Type.Information )
+                            table.insert(self.stateMachine.CombatZones.blue, self.targetZone)
+                            self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.blue, self.targetZone)
+                        elseif Coalition == coalition.side.RED then
+                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "%s is captured by Russia, we lost it!", self:GetZoneName() ), MESSAGE.Type.Information )
+                            self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "We captured %s, Excellent job!", self:GetZoneName() ), MESSAGE.Type.Information )
+                            table.insert(self.stateMachine.CombatZones.red, self.targetZone)
+                            self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.red, self.targetZone)
+                        else
+                            -- Remove the adjPoint from the neutral table
+                            self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.neutral, self.targetZone)
+                        end
+                        self.targetZone:Update()
+
+                        self:__Guard( 30 )
                     end
-                    self.targetZone.SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
-
-                    -- Remove the adjPoint from the neutral table
-                    self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.neutral, self.targetZone)
-
-                    if Coalition == coalition.side.BLUE then
-                        self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "%s is captured by the USA, we lost it!", self:GetZoneName() ), MESSAGE.Type.Information )
-                        self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "We captured %s, Excellent job!", self:GetZoneName() ), MESSAGE.Type.Information )
-                        table.insert(self.stateMachine.CombatZones.blue, self.targetZone)
-                        self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.blue, self.targetZone)
-                    else
-                        self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "%s is captured by Russia, we lost it!", self:GetZoneName() ), MESSAGE.Type.Information )
-                        self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "We captured %s, Excellent job!", self:GetZoneName() ), MESSAGE.Type.Information )
-                        table.insert(self.stateMachine.CombatZones.red, self.targetZone)
-                        self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.red, self.targetZone)
-                    end
-                    self.targetZone:Update()
-
-                    self:__Guard( 30 )
                 end
 
                 capturableZone:Start(3, 15):Guard()

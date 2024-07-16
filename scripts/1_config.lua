@@ -1,6 +1,6 @@
 if not WZ_CONFIG then
     WZ_CONFIG = {
-        debug = true, -- Show debug messages
+        debug = false, -- Show debug messages
         zone = {
             name = "Zone_Polygon_Area", -- The name of the polygon map marking in which to generate the combat zones
             subdivisions = 5, -- Grid size (e.g. 6 = 6x6, 7 = 7x7, etc.)

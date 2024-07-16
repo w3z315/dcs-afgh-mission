@@ -73,7 +73,7 @@ end
 function COMBAT_ZONE:SetCoalition(coalitionSide)
     self.Coalition = coalitionSide
     if WZ_CONFIG.debug then
-        MESSAGE:New("Zone " .. self.Name .. " coalition set to " .. tostring(coalitionSide), 5, "DEBUG"):ToAll()
+        --MESSAGE:New("Zone " .. self.Name .. " coalition set to " .. tostring(coalitionSide), 5, "DEBUG"):ToAll()
     end
     return self
 end
@@ -193,7 +193,7 @@ function COMBAT_ZONE:SetStatus(combatZoneStatus)
         self.Status = COMBAT_ZONE_STATUS.CAPTURED
     end
     if WZ_CONFIG.debug then
-        MESSAGE:New("Zone " .. self.Name .. " status set to " .. self:GetReadableStatus(), 5, "DEBUG"):ToAll()
+        --MESSAGE:New("Zone " .. self.Name .. " status set to " .. self:GetReadableStatus(), 5, "DEBUG"):ToAll()
     end
     return self
 end
