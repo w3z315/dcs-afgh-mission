@@ -23,7 +23,7 @@ if not WZ_CONFIG then
             restartAfterSeconds = 60, -- After how many seconds should the mission restart?
         },
         messages = { -- Messages that will be shown to the users. Make sure to keep %d wherever it is needed (exact amount!)
-            missionIntro = "Welcome to Weazel's zone fun! \nYour objective is to capture all designated zones on the battlefield. \nUse the F10 map to locate these zones. To secure a zone, you and your team must enter the zone and eliminate all enemy units within. \nIf the automatic capture feature is enabled, zones will be captured by their respective forces over time. \nVictory is achieved when one side controls all the zones. \nGood luck, pilots, and may the best team win!",
+            missionIntro = "Welcome to Weazel's zone fun! \n\nYour objective is to capture all designated zones on the battlefield. \nUse the F10 map to locate these zones. To secure a zone, you and your team must enter the zone and eliminate all enemy units within. \nIf the automatic capture feature is enabled, zones will be captured by their respective forces over time. \n\nVictory is achieved when one side controls all the zones. \nGood luck, pilots, and may the best team win!",
             expandingZones = {
                 blueMessage = "Our ground units have captured %d new zone(s) for the Blue Side. Enemy ground forces have secured %d new zone(s) for the Red Side.",
                 redMessage = "Enemy ground forces have secured %d new zone(s) for the Red Side. Our ground units have captured %d new zone(s) for the Blue Side.",

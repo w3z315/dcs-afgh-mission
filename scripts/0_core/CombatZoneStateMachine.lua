@@ -406,6 +406,9 @@ function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
 
     self.Missions.blue:Start()
     self.Missions.red:Start()
+    --Todo write to player on aircraft join
+    MESSAGE:New(WZ_CONFIG.messages.missionIntro, 60, "BRIEFING"):ToAll()
+    USERSOUND:New("intro.ogg"):ToAll()
 
 
     -- Generate CombatZones
