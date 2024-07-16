@@ -5,6 +5,7 @@ WZ_COMBAT_ZONES = {
     neutral = {}
 }
 WZ_LINE_AND_ZONE_MARKINGS = {}
+WZ_GAME_ENDED = false
 
 -- Define the main zone
 local mainZone = POLYGON:FindOnMap(WZ_CONFIG.zone.name)
@@ -57,7 +58,6 @@ local function createHexagon(centerX, centerY, zoneName, verticalOffset, horizon
     return zonePolygon
 end
 
-
 local function processZonesForCoalition(coalitionSide, allZones)
     local filteredZones = filterTable(allZones, function(combatZone)
         if combatZone.Coalition == coalitionSide then
@@ -66,10 +66,9 @@ local function processZonesForCoalition(coalitionSide, allZones)
     end)
 
     for _, combatZone in ipairs(filteredZones) do
-        combatZone.ClearLineMarkings()
         local targetPoint = combatZone
         local adjacentPoints = findAdjacentPoints(allZones, targetPoint, WZ_CONFIG.zone.lineMaxDistance)
-        local lineColor = coalitionSide == coalition.side.BLUE and {0, 0, 1} or {1, 0, 0}
+        local lineColor = coalitionSide == coalition.side.BLUE and { 0, 0, 1 } or { 1, 0, 0 }
 
         for _, adjPoint in ipairs(adjacentPoints) do
             local lineStyle, lineAlpha
@@ -79,7 +78,7 @@ local function processZonesForCoalition(coalitionSide, allZones)
             elseif (adjPoint.Coalition == coalition.side.BLUE and targetPoint.Coalition == coalition.side.RED) or
                     (adjPoint.Coalition == coalition.side.RED and targetPoint.Coalition == coalition.side.BLUE) then
                 lineStyle = 1 -- Dashed line
-                lineColor = {1, 1, 0}
+                lineColor = { 1, 1, 0 }
             else
                 lineStyle = 5 -- Long dashes
             end
@@ -90,9 +89,8 @@ local function processZonesForCoalition(coalitionSide, allZones)
     end
 end
 
-
 local function processCombatZones()
-    WZ_COMBAT_ZONES = {blue = {}, red = {}, neutral = {}}
+    WZ_COMBAT_ZONES = { blue = {}, red = {}, neutral = {} }
     -- Loop to create and place markers and drawings for each subdivided zone
     for i = 0, subdivisions - 1 do
         for j = 0, subdivisions - 1 do
@@ -126,23 +124,70 @@ local function processCombatZones()
     end
 end
 
+local function getWinner()
+    local blueCount = #WZ_COMBAT_ZONES.blue
+    local redCount = #WZ_COMBAT_ZONES.red
+    if redCount == 0 then
+        return coalition.side.BLUE
+    elseif blueCount == 0 then
+        return coalition.side.RED
+    end
+    return coalition.side.NEUTRAL
+end
+
 local function updateAllZones()
-    if WZ_CONFIG.debug then
-        MESSAGE:New("Updated", 2, "DEBUG"):ToAll()
+    if WZ_GAME_ENDED then
+        return
     end
 
-    local allZones = combineTables(WZ_COMBAT_ZONES)
-    for _, combatZone in ipairs(allZones) do
-        combatZone:ClearLineMarkings()
+
+    local winner = getWinner()
+    if winner ~= coalition.side.NEUTRAL then
+        if winner == coalition.side.BLUE then
+            local messageBlue = [[
+BLUE HAS WON!
+
+Congratulations to the brave pilots of the BLUE team!
+Zones captured: %d
+]]
+            MESSAGE:New(string.format(messageBlue, #WZ_COMBAT_ZONES.blue), 30, "MISSION ENDED", true):ToAll()
+            USERSOUND:New("blue_won.ogg"):ToAll()
+        elseif winner == coalition.side.RED then
+            local messageRed = [[
+RED HAS WON!
+
+Hail to the victorious RED team!
+Zones captured: %d
+]]
+            MESSAGE:New(string.format(messageRed, #WZ_COMBAT_ZONES.red), 30, "MISSION ENDED", true):ToAll()
+            USERSOUND:New("red_won.ogg"):ToAll()
+        end
+        if WZ_CONFIG.gameplay.restartAfterMissionEnds then
+            MESSAGE:New(string.format("MISSION WILL RESTART IN %d SECONDS", WZ_CONFIG.gameplay.restartAfterSeconds), WZ_CONFIG.gameplay.restartAfterSeconds, "NOTICE"):ToAll()
+            USERFLAG:New("restartMission"):Set(1, WZ_CONFIG.gameplay.restartAfterSeconds)
+        end
+        WZ_GAME_ENDED = true
+    else
+
+        if WZ_CONFIG.debug then
+            MESSAGE:New("Updated", 2, "DEBUG"):ToAll()
+        end
+
+        local allZones = combineTables(WZ_COMBAT_ZONES)
+        for _, combatZone in ipairs(allZones) do
+            combatZone:ClearLineMarkings()
+        end
+
+        for _, combatZone in ipairs(allZones) do
+            combatZone:Update()
+        end
+
+        -- Run processZonesForCoalition for BLUE and RED coalitions
+        processZonesForCoalition(coalition.side.RED, allZones)
+        processZonesForCoalition(coalition.side.BLUE, allZones)
+
     end
 
-    for _, combatZone in ipairs(allZones) do
-        combatZone:Update()
-    end
-
-    -- Run processZonesForCoalition for BLUE and RED coalitions
-    processZonesForCoalition(coalition.side.RED, allZones)
-    processZonesForCoalition(coalition.side.BLUE, allZones)
 end
 
 -- Function to get the coalition with fewer zones
@@ -157,6 +202,9 @@ local function getWinningSide()
 end
 
 local function changeAdjacentZonesCoalition()
+    if WZ_GAME_ENDED then
+        return
+    end
     local addedZonesForBlueSide = 0
     local addedZonesForRedSide = 0
     local allZones = shuffleTable(combineTables(WZ_COMBAT_ZONES))
@@ -168,7 +216,7 @@ local function changeAdjacentZonesCoalition()
             for _, adjPoint in ipairs(adjacentPoints) do
                 if adjPoint.Coalition == coalition.side.NEUTRAL then
                     -- Apply a reduced probability if the current zone's coalition is the winning side
-                    local probability = (combatZone.Coalition == winningSide) and 0.5 or 1.0
+                    local probability = (combatZone.Coalition == winningSide) and WZ_CONFIG.gameplay.winningSideProbability or 1.0
                     if math.random() <= probability then
                         if combatZone.Coalition == coalition.side.BLUE then
                             addedZonesForBlueSide = addedZonesForBlueSide + 1
@@ -185,8 +233,8 @@ local function changeAdjacentZonesCoalition()
     end
 
     if addedZonesForRedSide > 0 or addedZonesForBlueSide > 0 then
-        local messageBlue = string.format("Our ground units have captured %d new zone(s) for the Blue Side. Enemy forces have secured %d new zone(s) for the Red Side.", addedZonesForBlueSide, addedZonesForRedSide)
-        local messageRed = string.format("Enemy forces have secured %d new zone(s) for the Red Side. Our ground units have captured %d new zone(s) for the Blue Side.", addedZonesForRedSide, addedZonesForBlueSide)
+        local messageBlue = string.format("Our ground units have captured %d new zone(s) for the Blue Side. Enemy ground forces have secured %d new zone(s) for the Red Side.", addedZonesForBlueSide, addedZonesForRedSide)
+        local messageRed = string.format("Enemy ground forces have secured %d new zone(s) for the Red Side. Our ground units have captured %d new zone(s) for the Blue Side.", addedZonesForRedSide, addedZonesForBlueSide)
 
         MESSAGE:New(messageBlue, 30, "SITREP"):ToBlue()
         MESSAGE:New(messageRed, 30, "SITREP"):ToRed()
@@ -201,11 +249,14 @@ end
 -- Run processCombatZones once
 processCombatZones()
 
--- Schedule the change of adjacent zones coalition every 30 seconds
-SCHEDULER:New(nil, changeAdjacentZonesCoalition, {}, 6, 6)
+if WZ_CONFIG.gameplay.enableExpandingZones then
+    MESSAGE:New(string.format("Expanding zones enabled! Expanding sides every %d seconds.", WZ_CONFIG.gameplay.expandZonesEvery), 30, "GAMEPLAY INFO"):ToAll()
+    -- Schedule the change of adjacent zones coalition every 30 seconds
+    SCHEDULER:New(nil, changeAdjacentZonesCoalition, {}, WZ_CONFIG.gameplay.expandZonesEvery, WZ_CONFIG.gameplay.expandZonesEvery)
+end
 
 -- Schedule the update of all zones every 3 seconds
-SCHEDULER:New(nil, updateAllZones, {}, 0, 3)
+SCHEDULER:New(nil, updateAllZones, {}, 0, WZ_CONFIG.gameplay.updateZonesEvery)
 
 if WZ_CONFIG.debug then
     MESSAGE:New(string.format("Total amount of blue zones: %d", #WZ_COMBAT_ZONES.blue), 25, "DEBUG"):ToAll()
