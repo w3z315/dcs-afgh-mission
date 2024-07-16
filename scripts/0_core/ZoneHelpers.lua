@@ -1,4 +1,4 @@
-function findAdjacentPoints(points, targetPoint, maxDistance)
+function findAdjacentZones(points, targetPoint, maxDistance)
     local adjacentPoints = {}
     for _, point in ipairs(points) do
         if point.Name ~= targetPoint.Name then

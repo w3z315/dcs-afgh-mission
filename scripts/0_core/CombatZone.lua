@@ -30,7 +30,8 @@ COMBAT_ZONE = {
     CentroidArea = nil,
     FirstSpawn = true,
     IsAirBase = false,
-    Status = COMBAT_ZONE_STATUS.NEUTRAL
+    Status = COMBAT_ZONE_STATUS.NEUTRAL,
+    CanBeCaptured = false,
 }
 
 --- Creates a new instance of the COMBAT_ZONE class
@@ -60,6 +61,10 @@ end
 
 function COMBAT_ZONE:IsNeutral()
     return self.Coalition == coalition.side.NEUTRAL
+end
+
+function COMBAT_ZONE:GetKeyName()
+    return self.Name:gsub( "%s+", "" ):gsub("\-+", "")
 end
 
 --- Sets the coalition side for the combat zone
@@ -126,7 +131,7 @@ function COMBAT_ZONE:DestroyGroups()
 end
 
 function COMBAT_ZONE:HasGroups()
-    return #self.SpawnedGroups > 0
+    return countTableEntries(self.SpawnedGroups) > 0
 end
 
 function COMBAT_ZONE:IsBeingCaptured()

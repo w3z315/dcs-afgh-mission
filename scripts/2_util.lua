@@ -64,6 +64,13 @@ function mapTable(tbl, callback)
     return mappedTable
 end
 
+function countTableEntries(tbl)
+    local count = 0
+    for _ in pairs(tbl) do count = count + 1 end
+    return count
+end
+
+
 function getTimeLeftFromSeconds(seconds)
     local hours = string.format("%02d", math.floor(seconds / 3600))
     local minutes = string.format("%02d", math.floor((seconds % 3600) / 60))
