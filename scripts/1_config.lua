@@ -8,17 +8,29 @@ if not WZ_CONFIG then
             yOffset = 0, -- Move all markers up and down
             xOffset = 0, -- Move all markers left and right
             markers = {
-                enable = true, -- Show markers in the center of the zones
+                enable = true, -- Show markers in the area of the zones,
+                enableCapturingStatus = true, -- If set to true the map marker will show that the site is being captured
                 textFormat = "Capture Zone %d-%d" -- Text that the markers show, accepts two %d for Row / Col index
             }
         },
         gameplay = {
             enableExpandingZones = true, -- Automatically expand zones with some factors to make the mission quicker
+            enableExpandingZoneTimer = true, -- Show a timer on the map that displays the time until the troops will capture adjacent zones
             expandZonesEvery = 6, -- Auto expand every x seconds, default = 5min (300),
             winningSideProbability = 0.5, -- The probability the winning side automatically gets a new zone (0-1),
             updateZonesEvery = 3, -- How often (seconds) do we want to check the zones for updates (e.g. Coalition), default 3,
             restartAfterMissionEnds = false, -- Should the mission restart when someone won?
             restartAfterSeconds = 60, -- After how many seconds should the mission restart?
+        },
+        messages = { -- Messages that will be shown to the users. Make sure to keep %d wherever it is needed (exact amount!)
+            expandingZones = {
+                blueMessage = "Our ground units have captured %d new zone(s) for the Blue Side. Enemy ground forces have secured %d new zone(s) for the Red Side.",
+                redMessage = "Enemy ground forces have secured %d new zone(s) for the Red Side. Our ground units have captured %d new zone(s) for the Blue Side.",
+            },
+            win = {
+                blueMessage = "BLUE HAS WON!\n\nCongratulations to the brave pilots of the BLUE team!\nZones captured: %d",
+                redMessage = "RED HAS WON!\n\nHail to the victorious RED team!\nZones captured: %d",
+            }
         },
         groups = {
             defensive = {
@@ -29,7 +41,7 @@ if not WZ_CONFIG then
                 },
                 {
                     name = "ZoneTemplate | SA-6",
-                    probability = 0.2,
+                    probability = 0.35,
                     alwaysPresentOnAirBase = false, -- Add this if it should be always present on airbases (ignores probability)
                 },
                 {

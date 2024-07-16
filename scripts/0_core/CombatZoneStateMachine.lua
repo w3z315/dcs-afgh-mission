@@ -5,6 +5,8 @@
 ---@field GameEnded boolean
 ---@field __CombatZoneCoalitionMap table<string, string>
 ---@field __GameUpdateScheduler number
+---@field __ExpandingZonesScheduler number
+---@field __ExpandingZoneTimerScheduler number
 ---@field __SubZoneRadius number
 ---@field __DrawnLines table<string, boolean>
 COMBAT_ZONE_STATE_MACHINE = {
@@ -28,14 +30,19 @@ COMBAT_ZONE_STATE_MACHINE = {
     },
     __CombatZoneCoalitionMap = {},
     __GameUpdateScheduler = nil,
+    __ExpandingZonesScheduler = nil,
+    __ExpandingZoneTimerScheduler = nil,
     __SubZoneRadius = nil,
     __DrawnLines = {},
+    __TimerMarkerId = nil,
+    __TimeLeftUntilNextExpandingZone = 0,
 }
 
 --- Gets a new instance
 --- @return self
 function COMBAT_ZONE_STATE_MACHINE:New()
     local self = BASE:Inherit(self, BASE:New())
+    self.__TimeLeftUntilNextExpandingZone = WZ_CONFIG.gameplay.expandZonesEvery
     return self
 end
 
@@ -70,7 +77,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
         local drawnOppositeLine = false
 
         for _, adjPoint in ipairs(adjacentPoints) do
-            local lineColor = nil
+            local lineColor
             local lineStyle, lineAlpha = 2, .3
 
             if adjPoint.Coalition == coalition.side.NEUTRAL then
@@ -98,7 +105,6 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
         end
     end
 end
-
 
 --- Processes all combat zones
 --- @param subdivisions number The amount of subdivision to create
@@ -138,14 +144,18 @@ function COMBAT_ZONE_STATE_MACHINE:GetWinner()
     return coalition.side.NEUTRAL
 end
 
+function COMBAT_ZONE_STATE_MACHINE:HasNeutralZones()
+    return #self.CombatZones.neutral > 0
+end
+
 function COMBAT_ZONE_STATE_MACHINE:__CheckForWinners()
     local winner = self:GetWinner()
     if winner ~= coalition.side.NEUTRAL then
         if winner == coalition.side.BLUE then
-            MESSAGE:New(string.format("BLUE HAS WON!\n\nCongratulations to the brave pilots of the BLUE team!\nZones captured: %d", self:GetZoneCount("blue")), 30, "MISSION ENDED", true):ToAll()
+            MESSAGE:New(string.format(WZ_CONFIG.messages.win.blueMessage, self:GetZoneCount("blue")), 30, "MISSION ENDED", true):ToAll()
             USERSOUND:New("blue_won.ogg"):ToAll()
         elseif winner == coalition.side.RED then
-            MESSAGE:New(string.format("RED HAS WON!\n\nHail to the victorious RED team!\nZones captured: %d", self:GetZoneCount("red")), 30, "MISSION ENDED", true):ToAll()
+            MESSAGE:New(string.format(WZ_CONFIG.messages.win.redMessage, self:GetZoneCount("red")), 30, "MISSION ENDED", true):ToAll()
             USERSOUND:New("red_won.ogg"):ToAll()
         end
         if WZ_CONFIG.gameplay.restartAfterMissionEnds then
@@ -162,7 +172,7 @@ end
 --- @param combatZone COMBAT_ZONE The combat zone to check
 function COMBAT_ZONE_STATE_MACHINE:CombatZoneCoalitionChanged(combatZone)
     if not table.contains_key(self.__CombatZoneCoalitionMap, combatZone.Name) then
-        table.insert(self.__CombatZoneCoalitionMap, {[combatZone.Name] = combatZone.Coalition})
+        table.insert(self.__CombatZoneCoalitionMap, { [combatZone.Name] = combatZone.Coalition })
         return true
     end
 
@@ -203,7 +213,7 @@ function COMBAT_ZONE_STATE_MACHINE:GetWinningSide()
     if self:GetZoneCount("blue") > self:GetZoneCount("red") then
         return coalition.side.BLUE
     elseif self:GetZoneCount("blue") < self:GetZoneCount("red") then
-        return coalition.SIDE.RED
+        return coalition.side.RED
     end
     return coalition.side.NEUTRAL
 end
@@ -222,15 +232,31 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAdjacentZones()
             local adjacentPoints = findAdjacentPoints(allZones, combatZone, WZ_CONFIG.zone.lineMaxDistance)
             for _, adjPoint in ipairs(adjacentPoints) do
                 if adjPoint.Coalition == coalition.side.NEUTRAL then
-                    local probability = (combatZone.Coalition == winningSide) and WZ_CONFIG.gameplay.winningSideProbability or 1.0
+                    -- Increase the probability based on some factors
+                    local probability = (combatZone.Coalition == winningSide) and WZ_CONFIG.gameplay.winningSideProbability or 0.8
+                    -- Add a base chance to ensure some captures occur
+                    probability = math.max(probability, 0.8)
+
                     if math.random() <= probability then
-                        if combatZone.Coalition == coalition.side.BLUE then
-                            addedZonesForBlueSide = addedZonesForBlueSide + 1
-                        elseif combatZone.Coalition == coalition.side.RED then
-                            addedZonesForRedSide = addedZonesForRedSide + 1
-                        end
-                        adjPoint:SetCoalition(combatZone.Coalition)
+                        -- Update the coalition of the adjacent point
+                        local newCoalition = combatZone.Coalition
+                        adjPoint:SetCoalition(newCoalition)
                         adjPoint:Update()
+
+                        -- Remove the adjPoint from the neutral table
+                        self:RemoveZoneFromCoalitionTable(self.CombatZones.neutral, adjPoint)
+
+                        if newCoalition == coalition.side.BLUE then
+                            addedZonesForBlueSide = addedZonesForBlueSide + 1
+                            table.insert(self.CombatZones.blue, adjPoint)
+                            -- Remove from red table if it exists
+                            self:RemoveZoneFromCoalitionTable(self.CombatZones.red, adjPoint)
+                        elseif newCoalition == coalition.side.RED then
+                            addedZonesForRedSide = addedZonesForRedSide + 1
+                            table.insert(self.CombatZones.red, adjPoint)
+                            -- Remove from blue table if it exists
+                            self:RemoveZoneFromCoalitionTable(self.CombatZones.blue, adjPoint)
+                        end
                     end
                 end
             end
@@ -238,8 +264,8 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAdjacentZones()
     end
 
     if addedZonesForRedSide > 0 or addedZonesForBlueSide > 0 then
-        local messageBlue = string.format("Our ground units have captured %d new zone(s) for the Blue Side. Enemy ground forces have secured %d new zone(s) for the Red Side.", addedZonesForBlueSide, addedZonesForRedSide)
-        local messageRed = string.format("Enemy ground forces have secured %d new zone(s) for the Red Side. Our ground units have captured %d new zone(s) for the Blue Side.", addedZonesForRedSide, addedZonesForBlueSide)
+        local messageBlue = string.format(WZ_CONFIG.messages.expandingZones.blueMessage, addedZonesForBlueSide, addedZonesForRedSide)
+        local messageRed = string.format(WZ_CONFIG.messages.expandingZones.redMessage, addedZonesForRedSide, addedZonesForBlueSide)
         MESSAGE:New(messageBlue, 30, "SITREP"):ToBlue()
         MESSAGE:New(messageRed, 30, "SITREP"):ToRed()
         if WZ_CONFIG.debug then
@@ -248,6 +274,19 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAdjacentZones()
         end
     end
 end
+
+--- Removes a zone from a coalition table
+--- @param coalitionTable table The coalition table (blue, red, or neutral)
+--- @param zone COMBAT_ZONE The zone to remove
+function COMBAT_ZONE_STATE_MACHINE:RemoveZoneFromCoalitionTable(coalitionTable, zone)
+    for i = #coalitionTable, 1, -1 do
+        if coalitionTable[i] == zone then
+            table.remove(coalitionTable, i)
+            break
+        end
+    end
+end
+
 
 --- Start the CombatStateMachine, generate Zones and start the round
 --- @param mapZone ZONE
@@ -282,14 +321,114 @@ function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
     self.__GameUpdateScheduler = SCHEDULER:New(self, function(stateMachine)
         stateMachine:UpdateAllZones()
     end, { self }, 0, WZ_CONFIG.gameplay.updateZonesEvery)
+    return self
+end
+
+function COMBAT_ZONE_STATE_MACHINE:DrawExpandingZoneTimer()
+    local x = self.MainZone.maxX + 100000
+    local y = self.MainZone.maxY - 6500
+    local markerText = "Zones expanding in: " .. getTimeLeftFromSeconds(self.__TimeLeftUntilNextExpandingZone)
+    self.__TimerMarkerId = COORDINATE:New(x, 0, y):TextToAll(markerText, -1, {1,1,1}, 1.0, { 1, 0, 0 }, 1, 20, true)
+end
+
+function COMBAT_ZONE_STATE_MACHINE:TickExpandingZoneTimerClock()
+    self.__TimeLeftUntilNextExpandingZone = self.__TimeLeftUntilNextExpandingZone - 1
+    if self.__TimeLeftUntilNextExpandingZone <= 0 then
+        self.__TimeLeftUntilNextExpandingZone = WZ_CONFIG.gameplay.expandZonesEvery
+    end
+    self:ClearMarkers()
+    self:DrawExpandingZoneTimer()
+end
+
+function COMBAT_ZONE_STATE_MACHINE:ClearMarkers()
+    if self.__TimerMarkerId ~= nil then
+        UTILS.RemoveMark(self.__TimerMarkerId)
+    end
+end
+
+function COMBAT_ZONE_STATE_MACHINE:EnableExpandingZones()
+    self.__ExpandingZonesScheduler = SCHEDULER:New(self, function(machine)
+        if WZ_CONFIG.debug then
+            MESSAGE:New("Zones expanded.", 3, "DEBUG"):ToAll()
+        end
+        machine:UpdateAdjacentZones()
+
+        if not machine:HasNeutralZones() then
+            if machine.__ExpandingZonesScheduler ~= nil then
+                SCHEDULER:Stop(machine.__ExpandingZonesScheduler)
+                machine.__ExpandingZonesScheduler = nil
+            end
+        end
+    end, { self }, WZ_CONFIG.gameplay.expandZonesEvery, WZ_CONFIG.gameplay.expandZonesEvery)
+    return self
+end
+
+function COMBAT_ZONE_STATE_MACHINE:EnableExpandingZoneTimer()
+    self:DrawExpandingZoneTimer()
+    self.__ExpandingZoneTimerScheduler = SCHEDULER:New(self, function(machine)
+        if WZ_CONFIG.debug then
+            MESSAGE:New("Zone timer ticked", 1, "DEBUG"):ToAll()
+        end
+        machine:TickExpandingZoneTimerClock()
+
+
+        if not machine:HasNeutralZones() then
+            machine:ClearMarkers()
+            if machine.__ExpandingZoneTimerScheduler ~= nil then
+                SCHEDULER:Stop(machine.__ExpandingZoneTimerScheduler)
+                machine.__ExpandingZoneTimerScheduler = nil
+            end
+        end
+    end, { self }, 1, 1)
+    return self
 end
 
 function COMBAT_ZONE_STATE_MACHINE:GetZoneCount(coalitionSide)
     return #self.CombatZones[coalitionSide]
 end
 
+--- Stops the state machine and resets it. Destroys all active NPC units and drawings.
 function COMBAT_ZONE_STATE_MACHINE:Stop()
     if self.__GameUpdateScheduler ~= nil then
         SCHEDULER:Stop(self.__GameUpdateScheduler)
+        self.__GameUpdateScheduler = nil
     end
+    if self.__ExpandingZonesScheduler ~= nil then
+        SCHEDULER:Stop(self.__ExpandingZonesScheduler)
+        self.__ExpandingZonesScheduler = nil
+    end
+    if self.__ExpandingZoneTimerScheduler ~= nil then
+        SCHEDULER:Stop(self.__ExpandingZoneTimerScheduler)
+        self.__ExpandingZoneTimerScheduler = nil
+    end
+    for _, combatZone in ipairs(combineTables(self.CombatZones)) do
+        combatZone:Destroy()
+    end
+    self:ClearMarkers()
+    self.__DrawnLines = {}
+    self.CombatZones = {
+        blue = {},
+        red = {},
+        neutral = {},
+    }
+    self.SpawnedGroups = {}
+    self.GameEnded = false
+    self.MainZone = {
+        minX = 0,
+        maxX = 0,
+        minY = 0,
+        maxY = 0,
+        centerX = 0,
+        centerY = 0,
+        width = 0,
+        height = 0,
+    }
+    self.__CombatZoneCoalitionMap = {}
+    self.__GameUpdateScheduler = nil
+    self.__ExpandingZonesScheduler = nil
+    self.__ExpandingZoneTimerScheduler = nil
+    self.__SubZoneRadius = nil
+    self.__DrawnLines = {}
+    self.__TimerMarkerId = nil
+    self.__TimeLeftUntilNextExpandingZone = WZ_CONFIG.gameplay.expandZonesEvery
 end

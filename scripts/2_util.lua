@@ -63,3 +63,11 @@ function mapTable(tbl, callback)
 
     return mappedTable
 end
+
+function getTimeLeftFromSeconds(seconds)
+    local hours = string.format("%02d", math.floor(seconds / 3600))
+    local minutes = string.format("%02d", math.floor((seconds % 3600) / 60))
+    local secs = string.format("%02d", seconds % 60)
+
+    return hours .. ":" .. minutes .. ":" .. secs
+end

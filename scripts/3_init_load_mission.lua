@@ -3,18 +3,15 @@ WZ_CONFIG = WZ_CONFIG or {}
 -- Define the main zone
 local mainZone = POLYGON:FindOnMap(WZ_CONFIG.zone.name)
 
-local stateMachine = COMBAT_ZONE_STATE_MACHINE:New()
-stateMachine:Begin(mainZone)
-
+local stateMachine = COMBAT_ZONE_STATE_MACHINE:New():Begin(mainZone)
 
 if WZ_CONFIG.gameplay.enableExpandingZones then
     MESSAGE:New(string.format("Expanding zones enabled! Expanding sides every %d seconds.", WZ_CONFIG.gameplay.expandZonesEvery), 30, "GAMEPLAY INFO"):ToAll()
-    SCHEDULER:New(self, function(machine)
-        if WZ_CONFIG.debug then
-            MESSAGE:New("Zones expanded.", 3, "DEBUG"):ToAll()
-        end
-        machine:UpdateAdjacentZones()
-    end, {stateMachine}, WZ_CONFIG.gameplay.expandZonesEvery, WZ_CONFIG.gameplay.expandZonesEvery)
+    stateMachine:EnableExpandingZones()
+
+    if WZ_CONFIG.gameplay.enableExpandingZoneTimer then
+        stateMachine:EnableExpandingZoneTimer()
+    end
 end
 
 if WZ_CONFIG.debug then

@@ -1,3 +1,9 @@
+---@class COMBAT_ZONE_STATUS
+COMBAT_ZONE_STATUS = {
+    CAPTURED = {},
+    CAPTURING = {},
+    NEUTRAL = {},
+}
 ---@class COMBAT_ZONE : BASE
 ---@field protected ClassName string ClassName for base
 ---@field Zone ZONE_POLYGON The polygon zone of the combat zone
@@ -24,6 +30,7 @@ COMBAT_ZONE = {
     CentroidArea = nil,
     FirstSpawn = true,
     IsAirBase = false,
+    Status = COMBAT_ZONE_STATUS.NEUTRAL
 }
 
 --- Creates a new instance of the COMBAT_ZONE class
@@ -122,6 +129,10 @@ function COMBAT_ZONE:HasGroups()
     return #self.SpawnedGroups > 0
 end
 
+function COMBAT_ZONE:IsBeingCaptured()
+    return self.Status == COMBAT_ZONE_STATUS.CAPTURING
+end
+
 --- Clears all markings in the combat zone
 function COMBAT_ZONE:ClearMarkings()
     for _, markId in ipairs(self.MarkIds) do
@@ -154,21 +165,36 @@ function COMBAT_ZONE:AddToLineMarkingList(markId)
     table.add(self.LineMarkIds, markId)
 end
 
+function COMBAT_ZONE:SetStatus(combatZoneStatus)
+    self.Status = combatZoneStatus
+    return self
+end
+
 --- Updates the combat zone
 -- @return COMBAT_ZONE The updated instance of COMBAT_ZONE
 function COMBAT_ZONE:Update()
     if self.Coalition == coalition.side.BLUE then
         self.ZoneColor = { 0, 0, 1 }
+        if (self.Status ~= COMBAT_ZONE_STATUS.CAPTURING) then
+            self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
+        end
     elseif self.Coalition == coalition.side.RED then
         self.ZoneColor = { 1, 0, 0 }
+        if (self.Status ~= COMBAT_ZONE_STATUS.CAPTURING) then
+            self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
+        end
+    else
+        self:SetStatus(COMBAT_ZONE_STATUS.NEUTRAL)
     end
 
     if isAirbaseInZone(self.Zone, coalition.side.BLUE) then
         self:SetCoalition(coalition.side.BLUE)
+        self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
         self.ZoneColor = { 0, 0, 1 }
         self.IsAirBase = true
     elseif isAirbaseInZone(self.Zone, coalition.side.RED) then
         self:SetCoalition(coalition.side.RED)
+        self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
         self.ZoneColor = { 1, 0, 0 }
         self.IsAirBase = true
     else
@@ -180,12 +206,11 @@ function COMBAT_ZONE:Update()
     self:DrawMarkings(self.Polygon:GetCoordinates())
 
     if WZ_CONFIG.zone.markers.enable then
-        -- TODO: Add Time until next cap?
         local centroidPoints = self.Polygon:GetCentroid()
-        --local centroidCoords = COORDINATE:New(centroidPoints.x, 0, centroidPoints.y)
-        --table.insert(self.MarkIds, centroidCoords:MarkToAll(self.Name, true))
         local offsetCoords = COORDINATE:New(centroidPoints.x + 20000, 0, centroidPoints.y - 15000)
         local markerText = self.Name
+        local markerColor = self.ZoneColor
+        local textColor = {1,1,1}
         if not self:IsNeutral() then
             if self:IsBlueSide() then
                 markerText = markerText .. "\n\nUnder BLUE control"
@@ -193,22 +218,30 @@ function COMBAT_ZONE:Update()
                 markerText = markerText .. "\n\nUnder RED control"
             end
         end
-        table.insert(self.MarkIds, offsetCoords:TextToAll(markerText, -1,{1,1,1}, 1.0, self.ZoneColor, .8, 12, true))
+
+        if WZ_CONFIG.zone.markers.enableCapturingStatus and self:IsBeingCaptured() then
+            textColor = {0,0,0}
+            markerColor = {1,1,0}
+            markerText = self.Name .. "\n\nIS BEING CAPTURED"
+        end
+        table.insert(self.MarkIds, offsetCoords:TextToAll(markerText, -1, textColor, 1.0, markerColor, .8, 10, true))
     end
 
     return self
 end
 
 function COMBAT_ZONE:ShouldSpawnGroups()
-    -- TODO: !BeingCaptured()
     -- Has never spawned any groups but is not neutral
-    if self.FirstSpawn and not self:IsNeutral() then
-        return true
+    if not self:IsBeingCaptured() then
+        if self.FirstSpawn and not self:IsNeutral() then
+            return true
+        end
+        -- Has no units but has coalition
+        if not self.FirstSpawn and not self:IsNeutral() and not self:HasGroups() then
+            return true
+        end
     end
-    -- Has no units but has coalition
-    if not self.FirstSpawn and not self:IsNeutral() and not self:HasGroups() then
-        return true
-    end
+
     return false
 end
 
