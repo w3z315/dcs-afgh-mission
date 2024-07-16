@@ -2,6 +2,7 @@ function findAdjacentPoints(points, targetPoint, maxDistance)
     local adjacentPoints = {}
     for _, point in ipairs(points) do
         if point.Name ~= targetPoint.Name then
+
             local distance = calculateDistanceBetweenPoints(targetPoint.Point, point.Point)
             if distance <= maxDistance then
                 table.insert(adjacentPoints, point)

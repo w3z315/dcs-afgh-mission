@@ -200,7 +200,12 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
 end
 
 function COMBAT_ZONE_STATE_MACHINE:GetWinningSide()
-    return self:GetZoneCount("blue") > self:GetZoneCount("red") and coalition.side.BLUE or coalition.side.RED
+    if self:GetZoneCount("blue") > self:GetZoneCount("red") then
+        return coalition.side.BLUE
+    elseif self:GetZoneCount("blue") < self:GetZoneCount("red") then
+        return coalition.SIDE.RED
+    end
+    return coalition.side.NEUTRAL
 end
 
 function COMBAT_ZONE_STATE_MACHINE:UpdateAdjacentZones()

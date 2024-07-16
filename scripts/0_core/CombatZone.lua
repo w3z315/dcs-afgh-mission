@@ -23,6 +23,7 @@ COMBAT_ZONE = {
     SpawnedGroups = {},
     CentroidArea = nil,
     FirstSpawn = true,
+    IsAirBase = false,
 }
 
 --- Creates a new instance of the COMBAT_ZONE class
@@ -65,16 +66,41 @@ end
 --- Spawns units in the combat zone
 --- @return table
 function COMBAT_ZONE:SpawnGroups()
-    for _, groupName in ipairs(WZ_CONFIG.groups.defensive) do
-        local countryId = (self.Coalition == coalition.side.BLUE) and country.id.USA or country.id.RUSSIA
-        local spawnedGroup = SPAWN:New(groupName):InitCoalition(self.Coalition):InitCountry(countryId):SpawnInZone(self.CentroidArea, true)
-        table.insert(self.SpawnedGroups, spawnedGroup)
+    for _, groupSettings in ipairs(WZ_CONFIG.groups.defensive) do
+        local groupName = groupSettings.name
+        local shouldSpawn = (math.random() <= groupSettings.probability)
+
+        if groupSettings.alwaysPresentOnAirBase and self.IsAirBase then
+            shouldSpawn = true
+        end
+        if shouldSpawn then
+            local countryId = (self.Coalition == coalition.side.BLUE) and country.id.USA or country.id.RUSSIA
+            local spawnedGroup = SPAWN:NewWithAlias(groupName, groupName .. "-" .. math.random(1, 10000))
+                                      :InitCoalition(self.Coalition)
+                                      :InitCountry(countryId)
+                                      :OnSpawnGroup(function(group)
+                local name = group:GetName()
+                local u = group:GetFirstUnitAlive()
+                env.info(name .. " has spawned  " .. tostring(group:GetID()) .. ' ... first unit: ' .. (u and u:GetID() or '<none>') .. ' / ' .. (u and u:GetName() or '?'))
+            end)
+                                      :SpawnInZone(self.CentroidArea, true)
+            table.insert(self.SpawnedGroups, spawnedGroup)
+        end
     end
-    for _, staticName in ipairs(WZ_CONFIG.statics.defensive) do
-        local countryId = (self.Coalition == coalition.side.BLUE) and country.id.USA or country.id.RUSSIA
-        local spawn = SPAWNSTATIC:NewFromStatic(staticName, countryId):InitNamePrefix(self.Name .. '_Statics')
-        local spawnCoords = self.CentroidArea:GetRandomCoordinate():SetAltitude(1)
-        table.insert(self.SpawnedGroups, spawn:SpawnFromCoordinate(spawnCoords, 0))
+    for _, staticSettings in ipairs(WZ_CONFIG.statics.defensive) do
+        local staticName = staticSettings.name
+        local shouldSpawn = (math.random() <= staticSettings.probability)
+
+        if staticSettings.alwaysPresentOnAirBase and self.IsAirBase then
+            shouldSpawn = true
+        end
+
+        if shouldSpawn then
+            local countryId = (self.Coalition == coalition.side.BLUE) and country.id.USA or country.id.RUSSIA
+            local spawn = SPAWNSTATIC:NewFromStatic(staticName, countryId):InitNamePrefix(self.Name .. '_Statics')
+            local spawnCoords = self.CentroidArea:GetRandomCoordinate():SetAltitude(1)
+            table.insert(self.SpawnedGroups, spawn:SpawnFromCoordinate(spawnCoords, 0))
+        end
     end
     if self.FirstSpawn and self:HasGroups() then
         if WZ_CONFIG.debug then
@@ -131,19 +157,22 @@ end
 --- Updates the combat zone
 -- @return COMBAT_ZONE The updated instance of COMBAT_ZONE
 function COMBAT_ZONE:Update()
-
     if self.Coalition == coalition.side.BLUE then
         self.ZoneColor = { 0, 0, 1 }
     elseif self.Coalition == coalition.side.RED then
         self.ZoneColor = { 1, 0, 0 }
     end
 
-    if isAirbaseInZone(self.Zone, coalition.side.BLUE) and self.Coalition ~= coalition.side.BLUE then
+    if isAirbaseInZone(self.Zone, coalition.side.BLUE) then
         self:SetCoalition(coalition.side.BLUE)
         self.ZoneColor = { 0, 0, 1 }
-    elseif isAirbaseInZone(self.Zone, coalition.side.RED) and self.Coalition ~= coalition.side.RED then
+        self.IsAirBase = true
+    elseif isAirbaseInZone(self.Zone, coalition.side.RED) then
         self:SetCoalition(coalition.side.RED)
         self.ZoneColor = { 1, 0, 0 }
+        self.IsAirBase = true
+    else
+        self.IsAirBase = false
     end
 
     self:ClearMarkings()

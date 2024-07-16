@@ -4,7 +4,7 @@ if not WZ_CONFIG then
         zone = {
             name = "Zone_Polygon_Area", -- The name of the polygon map marking in which to generate the combat zones
             subdivisions = 5, -- Grid size (e.g. 6 = 6x6, 7 = 7x7, etc.)
-            lineMaxDistance = 80000, -- Max distance between two zones to count as adjacent
+            lineMaxDistance = 83000, -- Max distance between two zones to count as adjacent
             yOffset = 0, -- Move all markers up and down
             xOffset = 0, -- Move all markers left and right
             markers = {
@@ -22,17 +22,40 @@ if not WZ_CONFIG then
         },
         groups = {
             defensive = {
-                "ZoneTemplate | SA-2 ",
-                "ZoneTemplate | AAA",
-                "ZoneTemplate | Bunker 1",
+                {
+                    name = "ZoneTemplate | SA-2 ",
+                    probability = 0.15,
+                    alwaysPresentOnAirBase = true, -- Add this if it should be always present on airbases (ignores probability)
+                },
+                {
+                    name = "ZoneTemplate | AAA",
+                    probability = 1.0,
+                    alwaysPresentOnAirBase = true, -- Add this if it should be always present on airbases (ignores probability)
+                },
+                {
+                    name = "ZoneTemplate | Bunker 1",
+                    probability = 1.0
+                },
             }
         },
         statics = {
             defensive = {
-                "ZoneTemplate | Tank-1",
-                "ZoneTemplate | Tank-1-1",
-                "ZoneTemplate | Tank-2-1",
-                "ZoneTemplate | Comms-1",
+                {
+                    name = "ZoneTemplate | Tank-1",
+                    probability = 1.0
+                },
+                {
+                    name = "ZoneTemplate | Tank-1-1",
+                    probability = 1.0
+                },
+                {
+                    name = "ZoneTemplate | Tank-2-1",
+                    probability = 1.0
+                },
+                {
+                    name = "ZoneTemplate | Comms-1",
+                    probability = 1.0
+                },
                 --"ZoneTemplate | FARP1",
             }
         },
