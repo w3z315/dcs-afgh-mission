@@ -72,6 +72,9 @@ end
 -- @return COMBAT_ZONE The instance of COMBAT_ZONE
 function COMBAT_ZONE:SetCoalition(coalitionSide)
     self.Coalition = coalitionSide
+    if WZ_CONFIG.debug then
+        MESSAGE:New("Zone " .. self.Name .. " coalition set to " .. tostring(coalitionSide), 5, "DEBUG"):ToAll()
+    end
     return self
 end
 
@@ -174,52 +177,70 @@ function COMBAT_ZONE:AddToLineMarkingList(markId)
     table.add(self.LineMarkIds, markId)
 end
 
+function COMBAT_ZONE:GetReadableStatus()
+    if self.Status == COMBAT_ZONE_STATUS.CAPTURING then
+        return "CAPTURING"
+    elseif self.Status == COMBAT_ZONE_STATUS.CAPTURED then
+        return "CAPTURED"
+    end
+    return "NEUTRAL"
+end
+
 function COMBAT_ZONE:SetStatus(combatZoneStatus)
     self.Status = combatZoneStatus
+
+    if self.Status == COMBAT_ZONE_STATUS.NEUTRAL and not self:IsNeutral() then
+        self.Status = COMBAT_ZONE_STATUS.CAPTURED
+    end
+    if WZ_CONFIG.debug then
+        MESSAGE:New("Zone " .. self.Name .. " status set to " .. self:GetReadableStatus(), 5, "DEBUG"):ToAll()
+    end
     return self
 end
 
 --- Updates the combat zone
 -- @return COMBAT_ZONE The updated instance of COMBAT_ZONE
 function COMBAT_ZONE:Update()
+    -- Set color based on coalition and status
     if self.Coalition == coalition.side.BLUE then
         self.ZoneColor = { 0, 0, 1 }
-        if (self.Status ~= COMBAT_ZONE_STATUS.CAPTURING) then
-            self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
-        end
     elseif self.Coalition == coalition.side.RED then
         self.ZoneColor = { 1, 0, 0 }
-        if (self.Status ~= COMBAT_ZONE_STATUS.CAPTURING) then
-            self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
-        end
     else
-        self:SetStatus(COMBAT_ZONE_STATUS.NEUTRAL)
+        self.ZoneColor = { 0.5, 0.5, 0.5 }
     end
 
+    if WZ_CONFIG.debug then
+        -- Debug message to confirm color and status change
+        MESSAGE:New("Updating zone: " .. self.Name .. " with coalition: " .. tostring(self.Coalition) .. " and status: " .. self:GetReadableStatus(), 5, "DEBUG"):ToAll()
+    end
+
+    -- Update for airbase
     if isAirbaseInZone(self.Zone, coalition.side.BLUE) then
         self:SetCoalition(coalition.side.BLUE)
-        self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
         self.ZoneColor = { 0, 0, 1 }
         self.IsAirBase = true
     elseif isAirbaseInZone(self.Zone, coalition.side.RED) then
         self:SetCoalition(coalition.side.RED)
-        self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
         self.ZoneColor = { 1, 0, 0 }
         self.IsAirBase = true
     else
         self.IsAirBase = false
     end
 
+    -- Clear old markings and draw new ones
     self:ClearMarkings()
     self:ClearLineMarkings()
     self:DrawMarkings(self.Polygon:GetCoordinates())
 
+    -- Draw marker for zone status
     if WZ_CONFIG.zone.markers.enable then
         local centroidPoints = self.Polygon:GetCentroid()
         local offsetCoords = COORDINATE:New(centroidPoints.x + 20000, 0, centroidPoints.y - 15000)
         local markerText = self.Name
         local markerColor = self.ZoneColor
-        local textColor = {1,1,1}
+        local textColor = {1, 1, 1}
+
         if not self:IsNeutral() then
             if self:IsBlueSide() then
                 markerText = markerText .. "\n\nUnder BLUE control"
@@ -229,15 +250,17 @@ function COMBAT_ZONE:Update()
         end
 
         if WZ_CONFIG.zone.markers.enableCapturingStatus and self:IsBeingCaptured() then
-            textColor = {0,0,0}
-            markerColor = {1,1,0}
+            textColor = {0, 0, 0}
+            markerColor = {1, 1, 0}
             markerText = self.Name .. "\n\nIS BEING CAPTURED"
         end
+
         table.insert(self.MarkIds, offsetCoords:TextToAll(markerText, -1, textColor, 1.0, markerColor, .8, 10, true))
     end
 
     return self
 end
+
 
 function COMBAT_ZONE:ShouldSpawnGroups()
     -- Has never spawned any groups but is not neutral

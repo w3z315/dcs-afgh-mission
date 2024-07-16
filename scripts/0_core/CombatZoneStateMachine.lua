@@ -29,6 +29,11 @@ COMBAT_ZONE_STATE_MACHINE = {
         width = 0,
         height = 0,
     },
+    HeadQuarters = {
+        blue = nil,
+        red = nil,
+    },
+    Missions = {},
     __CombatZoneCoalitionMap = {},
     __GameUpdateScheduler = nil,
     __ExpandingZonesScheduler = nil,
@@ -82,21 +87,74 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
         local adjacentZones = findAdjacentZones(allZones, targetZone, WZ_CONFIG.zone.lineMaxDistance)
 
         -- Check if this point can be captured at all
-        if self:CanZoneBeCaptured(targetZone, adjacentZones) then
+        --if self:CanZoneBeCaptured(targetZone, adjacentZones) then
             local targetZoneKey = targetZone:GetKeyName()
             -- Enable ZoneCaptureCoalition
             local capturableZone
             if table.contains_key(self.CapturableCombatZones, targetZoneKey) then
                 capturableZone = self.CapturableCombatZones[targetZoneKey]
+                capturableZone.stateMachine = self
+                capturableZone.targetZone = targetZone
             else
-                -- TODO: Update coalition and CombatZone coalitions with event
                 self.CapturableCombatZones[targetZoneKey] = ZONE_CAPTURE_COALITION:New(targetZone.Zone, targetZone.Coalition, {Unit.Category.AIRPLANE, Unit.Category.HELICOPTER, Unit.Category.GROUND_UNIT})
                 capturableZone = self.CapturableCombatZones[targetZoneKey]
-                capturableZone:SetCoalition(targetZone.Coalition):Guard(1)
-                capturableZone:Start(0, 15)
-                capturableZone:Mark()
+                capturableZone.stateMachine = self
+                capturableZone.targetZone = targetZone
+
+                function capturableZone:OnAfterAttack(from, event, to)
+                    if from ~= to then
+                        self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURING)
+                    end
+                    self.targetZone:Update()
+                end
+                function capturableZone:OnAfterGuard(from, event, to)
+                    if from ~= to then
+                        self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
+                    end
+                    self.targetZone:Update()
+                end
+                function capturableZone:OnAfterEmpty(from, event, to)
+                    local Coalition = self:GetCoalition()
+
+                    if from ~= to then
+                        if Coalition ~= coalition.side.NEUTRAL then
+                            self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
+                        else
+                            self.targetZone:SetStatus(COMBAT_ZONE_STATUS.NEUTRAL)
+                        end
+                    end
+
+                    self.targetZone:Update()
+                end
+                function capturableZone:OnAfterCapture(from, event, to)
+                    local Coalition = self:GetCoalition()
+                    if Coalition ~= self.targetZone.Coalition then
+                        self.targetZone:SetCoalition(Coalition)
+                    end
+                    self.targetZone.SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
+
+                    -- Remove the adjPoint from the neutral table
+                    self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.neutral, self.targetZone)
+
+                    if Coalition == coalition.side.BLUE then
+                        self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "%s is captured by the USA, we lost it!", self:GetZoneName() ), MESSAGE.Type.Information )
+                        self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "We captured %s, Excellent job!", self:GetZoneName() ), MESSAGE.Type.Information )
+                        table.insert(self.stateMachine.CombatZones.blue, self.targetZone)
+                        self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.blue, self.targetZone)
+                    else
+                        self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "%s is captured by Russia, we lost it!", self:GetZoneName() ), MESSAGE.Type.Information )
+                        self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "We captured %s, Excellent job!", self:GetZoneName() ), MESSAGE.Type.Information )
+                        table.insert(self.stateMachine.CombatZones.red, self.targetZone)
+                        self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.red, self.targetZone)
+                    end
+                    self.targetZone:Update()
+
+                    self:__Guard( 30 )
+                end
+
+                capturableZone:Start(3, 15):Guard()
             end
-        end
+        --end
 
         local neutralColor = { .35, .35, .35 }
         local sameCoalitionColor = coalitionSide == coalition.side.BLUE and { 0, 0, 1 } or { 1, 0, 0 }
@@ -210,7 +268,7 @@ function COMBAT_ZONE_STATE_MACHINE:CombatZoneCoalitionChanged(combatZone)
     return false
 end
 
-function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
+function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones(combatZoneChanged)
     if WZ_CONFIG.debug then
         MESSAGE:New("Updating", 2, "DEBUG"):ToAll()
     end
@@ -223,7 +281,7 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
     for _, combatZone in ipairs(allZones) do
         combatZone:Update()
         if combatZone:ShouldSpawnGroups() then
-            if self:CombatZoneCoalitionChanged(combatZone) then
+            if self:CombatZoneCoalitionChanged(combatZone) or combatZone.Name == combatZoneChanged then
                 table.insert(self.SpawnedGroups, combatZone:SpawnGroups())
                 self.__CombatZoneCoalitionMap[combatZone.Name] = combatZone.Coalition
             end
@@ -319,6 +377,23 @@ end
 --- Start the CombatStateMachine, generate Zones and start the round
 --- @param mapZone ZONE
 function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
+    -- Create headquarters
+    self.HeadQuarters.red = COMMANDCENTER:New(
+            GROUP:FindByName(WZ_CONFIG.statics.headQuarters.red.groupName),
+            WZ_CONFIG.statics.headQuarters.red.prettyName
+    )
+    self.HeadQuarters.blue = COMMANDCENTER:New(
+            GROUP:FindByName(WZ_CONFIG.statics.headQuarters.blue.groupName),
+            WZ_CONFIG.statics.headQuarters.blue.prettyName
+    )
+
+    self.Missions.blue = MISSION:New(self.HeadQuarters.blue, "Weazel's zone fun", "Primary", WZ_CONFIG.messages.missionIntro, coalition.side.BLUE)
+    self.Missions.red = MISSION:New(self.HeadQuarters.red, "Weazel's zone fun", "Primary", WZ_CONFIG.messages.missionIntro, coalition.side.RED)
+
+    self.Missions.blue:Start()
+    self.Missions.red:Start()
+
+
     -- Generate CombatZones
     -- Get the min/max coordinates for bounds
     local bounds = mapZone:GetBoundingBox()
@@ -440,6 +515,7 @@ function COMBAT_ZONE_STATE_MACHINE:Stop()
         red = {},
         neutral = {},
     }
+    self.Missions = {}
     self.SpawnedGroups = {}
     self.GameEnded = false
     self.MainZone = {
@@ -451,6 +527,10 @@ function COMBAT_ZONE_STATE_MACHINE:Stop()
         centerY = 0,
         width = 0,
         height = 0,
+    }
+    self.HeadQuarters = {
+        blue = nil,
+        red = nil,
     }
     self.CapturableCombatZones = {}
     self.__CombatZoneCoalitionMap = {}
