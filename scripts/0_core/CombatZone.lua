@@ -180,15 +180,27 @@ function COMBAT_ZONE:Update()
     self:DrawMarkings(self.Polygon:GetCoordinates())
 
     if WZ_CONFIG.zone.markers.enable then
+        -- TODO: Add Time until next cap?
         local centroidPoints = self.Polygon:GetCentroid()
-        local centroidCoords = COORDINATE:New(centroidPoints.x, 0, centroidPoints.y)
-        centroidCoords:MarkToAll(self.Name, true)
+        --local centroidCoords = COORDINATE:New(centroidPoints.x, 0, centroidPoints.y)
+        --table.insert(self.MarkIds, centroidCoords:MarkToAll(self.Name, true))
+        local offsetCoords = COORDINATE:New(centroidPoints.x + 20000, 0, centroidPoints.y - 15000)
+        local markerText = self.Name
+        if not self:IsNeutral() then
+            if self:IsBlueSide() then
+                markerText = markerText .. "\n\nUnder BLUE control"
+            else
+                markerText = markerText .. "\n\nUnder RED control"
+            end
+        end
+        table.insert(self.MarkIds, offsetCoords:TextToAll(markerText, -1,{1,1,1}, 1.0, self.ZoneColor, .8, 12, true))
     end
 
     return self
 end
 
 function COMBAT_ZONE:ShouldSpawnGroups()
+    -- TODO: !BeingCaptured()
     -- Has never spawned any groups but is not neutral
     if self.FirstSpawn and not self:IsNeutral() then
         return true

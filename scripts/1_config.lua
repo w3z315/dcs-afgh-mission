@@ -9,7 +9,7 @@ if not WZ_CONFIG then
             xOffset = 0, -- Move all markers left and right
             markers = {
                 enable = true, -- Show markers in the center of the zones
-                textFormat = "CaptureZone_%d_%d" -- Text that the markers show, accepts two %d for Row / Col index
+                textFormat = "Capture Zone %d-%d" -- Text that the markers show, accepts two %d for Row / Col index
             }
         },
         gameplay = {
