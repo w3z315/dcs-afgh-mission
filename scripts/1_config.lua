@@ -23,8 +23,18 @@ if not WZ_CONFIG then
         groups = {
             defensive = {
                 {
-                    name = "ZoneTemplate | SA-2 ",
-                    probability = 0.15,
+                    name = "ZoneTemplate | SA-2", -- Home bases have SA-2 to make them more defensive
+                    probability = 0, -- No other area should have one
+                    alwaysPresentOnAirBase = true, -- Add this if it should be always present on airbases (ignores probability)
+                },
+                {
+                    name = "ZoneTemplate | SA-6",
+                    probability = 0.2,
+                    alwaysPresentOnAirBase = false, -- Add this if it should be always present on airbases (ignores probability)
+                },
+                {
+                    name = "ZoneTemplate | AAA",
+                    probability = 1.0,
                     alwaysPresentOnAirBase = true, -- Add this if it should be always present on airbases (ignores probability)
                 },
                 {
