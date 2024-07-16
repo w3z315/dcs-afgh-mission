@@ -1,10 +1,12 @@
 ---@class COMBAT_ZONE_STATE_MACHINE
 ---@field ClassName string
----@field CombatZones table<string, table>
+---@field CombatZones table<table<COMBAT_ZONE>>
 ---@field SpawnedGroups table
 ---@field GameEnded boolean
+---@field __CombatZoneCoalitionMap table<string, string>
 ---@field __GameUpdateScheduler number
 ---@field __SubZoneRadius number
+---@field __DrawnLines table<string, boolean>
 COMBAT_ZONE_STATE_MACHINE = {
     ClassName = "COMBAT_ZONE_STATE_MACHINE",
     CombatZones = {
@@ -24,8 +26,10 @@ COMBAT_ZONE_STATE_MACHINE = {
         width = 0,
         height = 0,
     },
+    __CombatZoneCoalitionMap = {},
     __GameUpdateScheduler = nil,
     __SubZoneRadius = nil,
+    __DrawnLines = {},
 }
 
 --- Gets a new instance
@@ -59,20 +63,43 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
     for _, combatZone in ipairs(filteredZones) do
         local targetPoint = combatZone
         local adjacentPoints = findAdjacentPoints(allZones, targetPoint, WZ_CONFIG.zone.lineMaxDistance)
-        local lineColor = coalitionSide == coalition.side.BLUE and { 0, 0, 1 } or { 1, 0, 0 }
+
+        local neutralColor = { .35, .35, .35 }
+        local sameCoalitionColor = coalitionSide == coalition.side.BLUE and { 0, 0, 1 } or { 1, 0, 0 }
+        local oppositeCoalitionColor = { 1, 1, 0 }
+        local drawnOppositeLine = false
 
         for _, adjPoint in ipairs(adjacentPoints) do
+            local lineColor = nil
             local lineStyle, lineAlpha = 2, .3
-            if adjPoint.Coalition ~= targetPoint.Coalition then
-                lineStyle = (adjPoint:IsBlueSide() and targetPoint:IsRedSide()) or
-                        (adjPoint:IsRedSide() and targetPoint:IsBlueSide()) and 1 or 5
-                lineColor = { 1, 1, 0 }
+
+            if adjPoint.Coalition == coalition.side.NEUTRAL then
+                lineColor = neutralColor
+            elseif adjPoint.Coalition == targetPoint.Coalition then
+                lineColor = sameCoalitionColor
+            elseif not drawnOppositeLine then
+                lineColor = oppositeCoalitionColor
+                lineAlpha = 1
+                lineStyle = 1
+                drawnOppositeLine = true
             end
-            local markId = COORDINATE:NewFromVec2(targetPoint.Point, 0):LineToAll(COORDINATE:NewFromVec2(adjPoint.Point, 0), -1, lineColor, lineAlpha, lineStyle, true)
-            combatZone:AddToLineMarkingList(markId)
+
+            if lineColor then
+                local lineKey1 = targetPoint.Point.x .. "," .. targetPoint.Point.y .. "->" .. adjPoint.Point.x .. "," .. adjPoint.Point.y
+                local lineKey2 = adjPoint.Point.x .. "," .. adjPoint.Point.y .. "->" .. targetPoint.Point.x .. "," .. targetPoint.Point.y
+
+                if not self.__DrawnLines[lineKey1] and not self.__DrawnLines[lineKey2] then
+                    local markId = COORDINATE:NewFromVec2(targetPoint.Point, 0):LineToAll(COORDINATE:NewFromVec2(adjPoint.Point, 0), -1, lineColor, lineAlpha, lineStyle, true)
+                    combatZone:AddToLineMarkingList(markId)
+                    self.__DrawnLines[lineKey1] = true
+                    self.__DrawnLines[lineKey2] = true
+                end
+            end
         end
     end
 end
+
+
 --- Processes all combat zones
 --- @param subdivisions number The amount of subdivision to create
 function COMBAT_ZONE_STATE_MACHINE:ProcessCombatZones(subdivisions)
@@ -111,11 +138,7 @@ function COMBAT_ZONE_STATE_MACHINE:GetWinner()
     return coalition.side.NEUTRAL
 end
 
-function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
-    if self.GameEnded then
-        return
-    end
-
+function COMBAT_ZONE_STATE_MACHINE:__CheckForWinners()
     local winner = self:GetWinner()
     if winner ~= coalition.side.NEUTRAL then
         if winner == coalition.side.BLUE then
@@ -129,21 +152,50 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
             MESSAGE:New(string.format("MISSION WILL RESTART IN %d SECONDS", WZ_CONFIG.gameplay.restartAfterSeconds), WZ_CONFIG.gameplay.restartAfterSeconds, "NOTICE"):ToAll()
             USERFLAG:New("restartMission"):Set(1, WZ_CONFIG.gameplay.restartAfterSeconds)
         end
-        WZ_GAME_ENDED = true
-    else
-        if WZ_CONFIG.debug then
-            MESSAGE:New("Updated", 2, "DEBUG"):ToAll()
-        end
+        self.GameEnded = true
+        return true
+    end
+    return false
+end
 
-        local allZones = combineTables(self.CombatZones)
-        for _, combatZone in ipairs(allZones) do
-            combatZone:ClearLineMarkings()
+--- Check if a combat zone coalition has changed
+--- @param combatZone COMBAT_ZONE The combat zone to check
+function COMBAT_ZONE_STATE_MACHINE:CombatZoneCoalitionChanged(combatZone)
+    if not table.contains_key(self.__CombatZoneCoalitionMap, combatZone.Name) then
+        table.insert(self.__CombatZoneCoalitionMap, {[combatZone.Name] = combatZone.Coalition})
+        return true
+    end
+
+    if self.__CombatZoneCoalitionMap[combatZone.Name] ~= combatZone.Coalition then
+        return true
+    end
+
+    return false
+end
+
+function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
+    if WZ_CONFIG.debug then
+        MESSAGE:New("Updating", 2, "DEBUG"):ToAll()
+    end
+    if self:__CheckForWinners() and self.GameEnded then
+        return
+    end
+
+    local allZones = combineTables(self.CombatZones)
+    self.__DrawnLines = {}
+    for _, combatZone in ipairs(allZones) do
+        combatZone:Update()
+        if combatZone:ShouldSpawnGroups() then
+            if self:CombatZoneCoalitionChanged(combatZone) then
+                table.insert(self.SpawnedGroups, combatZone:SpawnGroups())
+                self.__CombatZoneCoalitionMap[combatZone.Name] = combatZone.Coalition
+            end
         end
-        for _, combatZone in ipairs(allZones) do
-            combatZone:Update()
-        end
-        self:ProcessZonesForCoalition(coalition.side.RED, allZones)
-        self:ProcessZonesForCoalition(coalition.side.BLUE, allZones)
+    end
+    self:ProcessZonesForCoalition(coalition.side.RED, allZones)
+    self:ProcessZonesForCoalition(coalition.side.BLUE, allZones)
+    if WZ_CONFIG.debug then
+        MESSAGE:New("Updated", 2, "DEBUG"):ToAll()
     end
 end
 

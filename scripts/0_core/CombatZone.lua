@@ -22,6 +22,7 @@ COMBAT_ZONE = {
     ZoneColor = { .35, .35, .35 },
     SpawnedGroups = {},
     CentroidArea = nil,
+    FirstSpawn = true,
 }
 
 --- Creates a new instance of the COMBAT_ZONE class
@@ -58,15 +59,12 @@ end
 -- @return COMBAT_ZONE The instance of COMBAT_ZONE
 function COMBAT_ZONE:SetCoalition(coalitionSide)
     self.Coalition = coalitionSide
-    if coalitionSide ~= coalition.side.NEUTRAL then
-        --self:DestroyUnits()
-        --self:SpawnUnits()
-    end
     return self
 end
 
 --- Spawns units in the combat zone
-function COMBAT_ZONE:SpawnUnits()
+--- @return table
+function COMBAT_ZONE:SpawnGroups()
     for _, groupName in ipairs(WZ_CONFIG.groups.defensive) do
         local countryId = (self.Coalition == coalition.side.BLUE) and country.id.USA or country.id.RUSSIA
         local spawnedGroup = SPAWN:New(groupName):InitCoalition(self.Coalition):InitCountry(countryId):SpawnInZone(self.CentroidArea, true)
@@ -78,13 +76,24 @@ function COMBAT_ZONE:SpawnUnits()
         local spawnCoords = self.CentroidArea:GetRandomCoordinate():SetAltitude(1)
         table.insert(self.SpawnedGroups, spawn:SpawnFromCoordinate(spawnCoords, 0))
     end
+    if self.FirstSpawn and self:HasGroups() then
+        if WZ_CONFIG.debug then
+            MESSAGE:New("CombatZone spawned units for the first time.", 2, "DEBUG"):ToAll()
+        end
+        self.FirstSpawn = false
+    end
+    return self.SpawnedGroups
 end
 
 --- Destroys all units in the combat zone
-function COMBAT_ZONE:DestroyUnits()
+function COMBAT_ZONE:DestroyGroups()
     for _, group in ipairs(self.SpawnedGroups) do
         group:Destroy()
     end
+end
+
+function COMBAT_ZONE:HasGroups()
+    return #self.SpawnedGroups > 0
 end
 
 --- Clears all markings in the combat zone
@@ -122,10 +131,6 @@ end
 --- Updates the combat zone
 -- @return COMBAT_ZONE The updated instance of COMBAT_ZONE
 function COMBAT_ZONE:Update()
-    -- Todo: Unit spawn bug, move initial zone Coalition outside here
-    if #self.SpawnedGroups == 0 and self.Coalition ~= coalition.side.NEUTRAL then
-        self:SpawnUnits()
-    end
 
     if self.Coalition == coalition.side.BLUE then
         self.ZoneColor = { 0, 0, 1 }
@@ -154,9 +159,21 @@ function COMBAT_ZONE:Update()
     return self
 end
 
+function COMBAT_ZONE:ShouldSpawnGroups()
+    -- Has never spawned any groups but is not neutral
+    if self.FirstSpawn and not self:IsNeutral() then
+        return true
+    end
+    -- Has no units but has coalition
+    if not self.FirstSpawn and not self:IsNeutral() and not self:HasGroups() then
+        return true
+    end
+    return false
+end
+
 --- Destroys the combat zone
 function COMBAT_ZONE:Destroy()
-    self:DestroyUnits()
+    self:DestroyGroups()
     self:ClearMarkings()
     self:ClearLineMarkings()
 end
