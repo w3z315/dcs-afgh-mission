@@ -42,6 +42,7 @@ COMBAT_ZONE_STATE_MACHINE = {
     __DrawnLines = {},
     __TimerMarkerId = nil,
     __TimeLeftUntilNextExpandingZone = 0,
+    __Clients = {},
 }
 
 --- Gets a new instance
@@ -49,6 +50,7 @@ COMBAT_ZONE_STATE_MACHINE = {
 function COMBAT_ZONE_STATE_MACHINE:New()
     local self = BASE:Inherit(self, BASE:New())
     self.__TimeLeftUntilNextExpandingZone = WZ_CONFIG.gameplay.expandZonesEvery
+    self.__Clients = SET_CLIENT:New():FilterActive():FilterStart()
     return self
 end
 
@@ -96,6 +98,9 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                 capturableZone.stateMachine = self
                 capturableZone.targetZone = targetZone
             else
+                if WZ_CONFIG.debug then
+                    MESSAGE:New("UPDATING CAPTURABLE ZONES" , 5, "DEBUG"):ToAll()
+                end
                 self.CapturableCombatZones[targetZoneKey] = ZONE_CAPTURE_COALITION:New(targetZone.Zone, targetZone.Coalition, {Unit.Category.AIRPLANE, Unit.Category.HELICOPTER, Unit.Category.GROUND_UNIT})
                 capturableZone = self.CapturableCombatZones[targetZoneKey]
                 capturableZone.stateMachine = self
@@ -391,6 +396,30 @@ function COMBAT_ZONE_STATE_MACHINE:RemoveZoneFromCoalitionTable(coalitionTable, 
     end
 end
 
+-- Checks if clients need updates
+function COMBAT_ZONE_STATE_MACHINE:UpdateClients()
+    self.__Clients:ForEachClient(function(client)
+        DATABASE:GetPlayers()
+        if client:GetGroup() then
+            local group = client:GetGroup()
+            if client:GetPlayerName() then
+                MESSAGE:New(client:GetPlayerName() .. ": " .. group:GetName(), 10):ToAll()
+            else
+                MESSAGE:New(tostring(client:IsAlive()) .. ": " .. group:GetName(), 10):ToAll()
+            end
+            local joinedPlayers = mapTable(DATABASE:GetPlayersJoined(), function(playerUnit)
+                return playerUnit:GetPlayerName()
+            end)
+            if group:IsAlive() and not table.contains(joinedPlayers, client:GetPlayerName()) then
+                MESSAGE:New(WZ_CONFIG.messages.missionIntro, 30, "BRIEFING"):ToClient(client)
+                if WZ_CONFIG.audio.missionIntroSound then
+                    USERSOUND:New(WZ_CONFIG.audio.missionIntroSoundFile):ToClient(client)
+                end
+            end
+        end
+    end)
+end
+
 --- Start the CombatStateMachine, generate Zones and start the round
 --- @param mapZone ZONE
 function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
@@ -409,10 +438,6 @@ function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
 
     self.Missions.blue:Start()
     self.Missions.red:Start()
-    --Todo write to player on aircraft join
-    MESSAGE:New(WZ_CONFIG.messages.missionIntro, 60, "BRIEFING"):ToAll()
-    USERSOUND:New("intro.ogg"):ToAll()
-
 
     -- Generate CombatZones
     -- Get the min/max coordinates for bounds
@@ -444,6 +469,9 @@ function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
     self.__GameUpdateScheduler = SCHEDULER:New(self, function(stateMachine)
         stateMachine:UpdateAllZones()
     end, { self }, 0, WZ_CONFIG.gameplay.updateZonesEvery)
+    self.__PlayerCheckScheduler = SCHEDULER:New(self, function(stateMachine)
+        stateMachine:UpdateClients()
+    end, { self }, 0, WZ_CONFIG.gameplay.updatePlayerStatusEvery)
     return self
 end
 
@@ -475,6 +503,10 @@ function COMBAT_ZONE_STATE_MACHINE:ClearCapturableCombatZones()
     end
 end
 
+function COMBAT_ZONE_STATE_MACHINE:GetZoneCount(coalitionSide)
+    return countTableEntries(self.CombatZones[coalitionSide])
+end
+
 function COMBAT_ZONE_STATE_MACHINE:EnableExpandingZones()
     self.__ExpandingZonesScheduler = SCHEDULER:New(self, function(machine)
         if machine:HasNeutralZones() then
@@ -498,7 +530,7 @@ function COMBAT_ZONE_STATE_MACHINE:EnableExpandingZoneTimer()
         if not machine:HasNeutralZones() then
             machine:ClearMarkers()
             if machine.__ExpandingZoneTimerScheduler ~= nil then
-                SCHEDULER:Stop(machine.__ExpandingZoneTimerScheduler)
+                SCHEDULER:Remove(machine.__ExpandingZoneTimerScheduler)
                 machine.__ExpandingZoneTimerScheduler = nil
             end
         end
@@ -506,22 +538,22 @@ function COMBAT_ZONE_STATE_MACHINE:EnableExpandingZoneTimer()
     return self
 end
 
-function COMBAT_ZONE_STATE_MACHINE:GetZoneCount(coalitionSide)
-    return countTableEntries(self.CombatZones[coalitionSide])
-end
-
 --- Stops the state machine and resets it. Destroys all active NPC units and drawings.
 function COMBAT_ZONE_STATE_MACHINE:Stop()
     if self.__GameUpdateScheduler ~= nil then
-        SCHEDULER:Stop(self.__GameUpdateScheduler)
+        SCHEDULER:Remove(self.__GameUpdateScheduler)
         self.__GameUpdateScheduler = nil
     end
+    if self.__PlayerCheckScheduler ~= nil then
+        SCHEDULER:Remove(self.__PlayerCheckScheduler)
+        self.__PlayerCheckScheduler = nil
+    end
     if self.__ExpandingZonesScheduler ~= nil then
-        SCHEDULER:Stop(self.__ExpandingZonesScheduler)
+        SCHEDULER:Remove(self.__ExpandingZonesScheduler)
         self.__ExpandingZonesScheduler = nil
     end
     if self.__ExpandingZoneTimerScheduler ~= nil then
-        SCHEDULER:Stop(self.__ExpandingZoneTimerScheduler)
+        SCHEDULER:Remove(self.__ExpandingZoneTimerScheduler)
         self.__ExpandingZoneTimerScheduler = nil
     end
     for _, combatZone in ipairs(combineTables(self.CombatZones)) do
@@ -559,6 +591,7 @@ function COMBAT_ZONE_STATE_MACHINE:Stop()
     self.__ExpandingZoneTimerScheduler = nil
     self.__SubZoneRadius = nil
     self.__DrawnLines = {}
+    self.__Clients = {}
     self.__TimerMarkerId = nil
     self.__TimeLeftUntilNextExpandingZone = WZ_CONFIG.gameplay.expandZonesEvery
 end

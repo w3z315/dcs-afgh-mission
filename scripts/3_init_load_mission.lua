@@ -14,6 +14,7 @@ if WZ_CONFIG.gameplay.enableExpandingZones then
     end
 end
 
+
 if WZ_CONFIG.debug then
     MESSAGE:New(string.format("Total amount of blue zones: %d", WZ_stateMachine:GetZoneCount("blue")), 25, "DEBUG"):ToAll()
     MESSAGE:New(string.format("Total amount of red zones: %d", WZ_stateMachine:GetZoneCount("red")), 25, "DEBUG"):ToAll()

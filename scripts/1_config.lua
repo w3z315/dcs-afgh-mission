@@ -16,11 +16,16 @@ if not WZ_CONFIG then
         gameplay = {
             enableExpandingZones = true, -- Automatically expand zones with some factors to make the mission quicker
             enableExpandingZoneTimer = true, -- Show a timer on the map that displays the time until the troops will capture adjacent zones
-            expandZonesEvery = 300, -- Auto expand every x seconds, default = 5min (300),
-            winningSideProbability = 0.5, -- The probability the winning side automatically gets a new zone (0-1),
-            updateZonesEvery = 3, -- How often (seconds) do we want to check the zones for updates (e.g. Coalition), default 3,
+            expandZonesEvery = 30, -- Auto expand every x seconds, default = 5min (300),
+            winningSideProbability = 0.5, -- The probability the winning side automatically gets a new zone (0.0 - 1.0),
+            updateZonesEvery = 10, -- How often (seconds) do we want to check the zones for updates (e.g. Coalition), default 10 - Set to higher value if you are running into performance issues
+            updatePlayerStatusEvery = 3, -- How often (seconds) do we want to check players for updates (can be a lot faster)
             restartAfterMissionEnds = false, -- Should the mission restart when someone won?
-            restartAfterSeconds = 60, -- After how many seconds should the mission restart?
+            restartAfterSeconds = 60, -- After how many seconds should the mission restart?,
+        },
+        audio = {
+            missionIntroSound = true, -- Play a intro when a user joins the mission for the first time
+            missionIntroSoundFile = "intro.ogg", -- Sound file name. Add this as a trigger to your mission (play to neutral once) so it gets inserted into the mission and we can play it as intro.
         },
         messages = { -- Messages that will be shown to the users. Make sure to keep %d wherever it is needed (exact amount!)
             missionIntro = "Welcome to Weazel's zone fun! \n\nYour objective is to capture all designated zones on the battlefield. \nUse the F10 map to locate these zones. To secure a zone, you and your team must enter the zone and eliminate all enemy units within. \nIf the automatic capture feature is enabled, zones will be captured by their respective forces over time. \n\nVictory is achieved when one side controls all the zones. \nGood luck, pilots, and may the best team win!",
@@ -37,7 +42,7 @@ if not WZ_CONFIG then
             defensive = {
                 {
                     name = "ZoneTemplate | SA-2", -- Home bases have SA-2 to make them more defensive
-                    probability = 0, -- No other area should have one
+                    probability = 0, -- No other area should have one (0.0 - 1.0)
                     alwaysPresentOnAirBase = true, -- Add this if it should be always present on airbases (ignores probability)
                 },
                 {
