@@ -407,14 +407,8 @@ end
 -- Checks if clients need updates
 function COMBAT_ZONE_STATE_MACHINE:UpdateClients()
     self.__Clients:ForEachClient(function(client)
-        DATABASE:GetPlayers()
         if client:GetGroup() then
             local group = client:GetGroup()
-            if client:GetPlayerName() then
-                MESSAGE:New(client:GetPlayerName() .. ": " .. group:GetName(), 10):ToAll()
-            else
-                MESSAGE:New(tostring(client:IsAlive()) .. ": " .. group:GetName(), 10):ToAll()
-            end
             local joinedPlayers = mapTable(DATABASE:GetPlayersJoined(), function(playerUnit)
                 return playerUnit:GetPlayerName()
             end)
@@ -477,6 +471,7 @@ function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
     self.__GameUpdateScheduler = SCHEDULER:New(self, function(stateMachine)
         stateMachine:UpdateAllZones()
     end, { self }, 0, WZ_CONFIG.gameplay.updateZonesEvery)
+
     self.__PlayerCheckScheduler = SCHEDULER:New(self, function(stateMachine)
         stateMachine:UpdateClients()
     end, { self }, 0, WZ_CONFIG.gameplay.updatePlayerStatusEvery)
