@@ -43,6 +43,7 @@ COMBAT_ZONE_STATE_MACHINE = {
     __TimerMarkerId = nil,
     __TimeLeftUntilNextExpandingZone = 0,
     __Clients = {},
+    __JoinedPlayers = {},
 }
 
 --- Gets a new instance
@@ -77,6 +78,12 @@ function COMBAT_ZONE_STATE_MACHINE:CanZoneBeCaptured(targetZone, adjacentZones)
     return countTableEntries(filterTable(adjacentZones, function(zone)
         return zone.Coalition ~= targetZone.Coalition
     end)) > 0
+end
+
+function COMBAT_ZONE_STATE_MACHINE:UpdateCombatZonesStatus()
+    for _, zone in ipairs(combineTables(self.stateMachine.CapturableCombatZones)) do
+        zone:Update()
+    end
 end
 
 function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZones)
@@ -132,7 +139,9 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                     if from ~= to then
                         self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
                     end
-                    self.targetZone:Update()
+                    -- Update all zones
+                    self.stateMachine:UpdateCombatZonesStatus()
+                    self.__DrawnLines = {}
                 end
                 function capturableZone:OnEnterEmpty(from, event, to)
                     local Coalition = self:GetCoalition()
@@ -173,45 +182,57 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                             -- Remove the adjPoint from the neutral table
                             self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.neutral, self.targetZone)
                         end
-                        self.targetZone:Update()
+                        -- Update all zones
+                        self.stateMachine:UpdateCombatZonesStatus()
 
+                        self.__DrawnLines = {}
                         self:__Guard( 30 )
                     end
                 end
 
                 capturableZone:Start(3, 15):Guard()
             end
-        end
 
-        local neutralColor = { .35, .35, .35 }
-        local sameCoalitionColor = coalitionSide == coalition.side.BLUE and { 0, 0, 1 } or { 1, 0, 0 }
-        local oppositeCoalitionColor = { 1, 1, 0 }
-        local drawnOppositeLine = false
+            local neutralColor = { .35, .35, .35 }
+            local sameCoalitionColor = coalitionSide == coalition.side.BLUE and { 0, 0, 1 } or { 1, 0, 0 }
+            local oppositeCoalitionColor = { 1, 1, 0 }
+            local drawnOppositeLine = false
 
-        for _, adjZone in ipairs(adjacentZones) do
-            local lineColor
-            local lineStyle, lineAlpha = 2, .3
+            for _, adjZone in ipairs(adjacentZones) do
+                local lineColor
+                local lineStyle, lineAlpha = 2, .3
 
-            if adjZone.Coalition == coalition.side.NEUTRAL then
-                lineColor = neutralColor
-            elseif adjZone.Coalition == targetZone.Coalition then
-                lineColor = sameCoalitionColor
-            elseif not drawnOppositeLine then
-                lineColor = oppositeCoalitionColor
-                lineAlpha = 1
-                lineStyle = 1
-                drawnOppositeLine = true
-            end
 
-            if lineColor then
-                local lineKey1 = targetZone.Point.x .. "," .. targetZone.Point.y .. "->" .. adjZone.Point.x .. "," .. adjZone.Point.y
-                local lineKey2 = adjZone.Point.x .. "," .. adjZone.Point.y .. "->" .. targetZone.Point.x .. "," .. targetZone.Point.y
+                local adjAdjZones = findAdjacentZones(adjacentZones, adjZone, WZ_CONFIG.zone.lineMaxDistance)
 
-                if not self.__DrawnLines[lineKey1] and not self.__DrawnLines[lineKey2] then
-                    local markId = COORDINATE:NewFromVec2(targetZone.Point, 0):LineToAll(COORDINATE:NewFromVec2(adjZone.Point, 0), -1, lineColor, lineAlpha, lineStyle, true)
-                    combatZone:AddToLineMarkingList(markId)
-                    self.__DrawnLines[lineKey1] = true
-                    self.__DrawnLines[lineKey2] = true
+                if self:CanZoneBeCaptured(adjZone, adjAdjZones) then
+                    if adjZone:IsNeutral() then
+                        lineColor = neutralColor
+                    elseif adjZone.Coalition == targetZone.Coalition then
+                        lineColor = sameCoalitionColor
+                    elseif not drawnOppositeLine and (not adjZone:IsNeutral() and not targetZone:IsNeutral()) then
+                        lineColor = oppositeCoalitionColor
+                        lineAlpha = 1
+                        lineStyle = 1
+                        drawnOppositeLine = true
+                    else
+                        lineColor = oppositeCoalitionColor
+                        lineAlpha = .8
+                    end
+
+                    if lineColor then
+                        local lineKey1 = targetZone.Point.x .. "," .. targetZone.Point.y .. "->" .. adjZone.Point.x .. "," .. adjZone.Point.y
+                        local lineKey2 = adjZone.Point.x .. "," .. adjZone.Point.y .. "->" .. targetZone.Point.x .. "," .. targetZone.Point.y
+
+                        if not self.__DrawnLines[lineKey1] and not self.__DrawnLines[lineKey2] then
+                            combatZone:ClearLineMarkings()
+                            local markId = COORDINATE:NewFromVec2(targetZone.Point, 0):LineToAll(COORDINATE:NewFromVec2(adjZone.Point, 0), -1, lineColor, lineAlpha, lineStyle, true)
+                            combatZone:AddToLineMarkingList(markId)
+                            self.__DrawnLines[lineKey1] = true
+                            self.__DrawnLines[lineKey2] = true
+                        end
+                    end
+                    drawnOppositeLine = false
                 end
             end
         end
@@ -304,7 +325,6 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones(combatZoneChanged)
     end
 
     local allZones = combineTables(self.CombatZones)
-    self.__DrawnLines = {}
     for _, combatZone in ipairs(allZones) do
         combatZone:Update()
         if combatZone:ShouldSpawnGroups() then
@@ -409,13 +429,11 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateClients()
     self.__Clients:ForEachClient(function(client)
         if client:GetGroup() then
             local group = client:GetGroup()
-            local joinedPlayers = mapTable(DATABASE:GetPlayersJoined(), function(playerUnit)
-                return playerUnit:GetPlayerName()
-            end)
-            if group:IsAlive() and not table.contains(joinedPlayers, client:GetPlayerName()) then
+            if group:IsAlive() and not table.contains(self.__JoinedPlayers, client:GetPlayerName()) then
                 MESSAGE:New(WZ_CONFIG.messages.missionIntro, 30, "BRIEFING"):ToClient(client)
                 if WZ_CONFIG.audio.missionIntroSound then
                     USERSOUND:New(WZ_CONFIG.audio.missionIntroSoundFile):ToClient(client)
+                    table.add(self.__JoinedPlayers, client:GetPlayerName())
                 end
             end
         end
@@ -470,7 +488,7 @@ function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
 
     self.__GameUpdateScheduler = SCHEDULER:New(self, function(stateMachine)
         stateMachine:UpdateAllZones()
-    end, { self }, 0, WZ_CONFIG.gameplay.updateZonesEvery)
+    end, { self }, 3, WZ_CONFIG.gameplay.updateZonesEvery)
 
     self.__PlayerCheckScheduler = SCHEDULER:New(self, function(stateMachine)
         stateMachine:UpdateClients()
@@ -595,6 +613,7 @@ function COMBAT_ZONE_STATE_MACHINE:Stop()
     self.__SubZoneRadius = nil
     self.__DrawnLines = {}
     self.__Clients = {}
+    self.__JoinedPlayers = {}
     self.__TimerMarkerId = nil
     self.__TimeLeftUntilNextExpandingZone = WZ_CONFIG.gameplay.expandZonesEvery
 end

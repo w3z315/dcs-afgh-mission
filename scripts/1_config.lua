@@ -18,7 +18,7 @@ if not WZ_CONFIG then
             enableExpandingZoneTimer = true, -- Show a timer on the map that displays the time until the troops will capture adjacent zones
             expandZonesEvery = 600, -- Auto expand every x seconds, default = 10min (600),
             winningSideProbability = 0.5, -- The probability the winning side automatically gets a new zone (0.0 - 1.0),
-            updateZonesEvery = 20, -- How often (seconds) do we want to check the zones for updates (e.g. Coalition), default 20 - Set to higher value if you are running into performance issues
+            updateZonesEvery = 10, -- How often (seconds) do we want to check the zones for updates (e.g. Coalition), default 10 - Set to higher value if you are running into performance issues
             updatePlayerStatusEvery = 3, -- How often (seconds) do we want to check players for updates (can be a lot faster)
             restartAfterMissionEnds = false, -- Should the mission restart when someone won?
             restartAfterSeconds = 60, -- After how many seconds should the mission restart?,

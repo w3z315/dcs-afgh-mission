@@ -244,7 +244,6 @@ function COMBAT_ZONE:Update()
 
     -- Clear old markings and draw new ones
     self:ClearMarkings()
-    self:ClearLineMarkings()
     self:DrawMarkings(self.Polygon:GetCoordinates())
 
     -- Draw marker for zone status
