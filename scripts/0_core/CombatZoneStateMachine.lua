@@ -109,7 +109,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                     if from ~= to then
                         self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURING)
                     end
-                    --self.targetZone:Update()
+                    self.targetZone:Update()
                 end
                 function capturableZone:OnEnterGuarded(from, event, to)
                     local Coalition = self:GetCoalition()
@@ -119,7 +119,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                     if from ~= to then
                         self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
                     end
-                    --self.targetZone:Update()
+                    self.targetZone:Update()
                 end
                 function capturableZone:OnEnterEmpty(from, event, to)
                     local Coalition = self:GetCoalition()
@@ -134,7 +134,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                             self.targetZone:SetStatus(COMBAT_ZONE_STATUS.NEUTRAL)
                         end
                     end
-                    --self.targetZone:Update()
+                    self.targetZone:Update()
                 end
                 function capturableZone:OnEnterCaptured(from, event, to)
                     local Coalition = self:GetCoalition()
@@ -296,6 +296,9 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones(combatZoneChanged)
         combatZone:Update()
         if combatZone:ShouldSpawnGroups() then
             if self:CombatZoneCoalitionChanged(combatZone) or combatZone.Name == combatZoneChanged then
+                if combatZone:AnyUnitHasDifferentCoalition() then
+                    combatZone:DestroyGroups()
+                end
                 table.insert(self.SpawnedGroups, combatZone:SpawnGroups())
                 self.__CombatZoneCoalitionMap[combatZone.Name] = combatZone.Coalition
             end

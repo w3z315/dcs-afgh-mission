@@ -64,7 +64,7 @@ function COMBAT_ZONE:IsNeutral()
 end
 
 function COMBAT_ZONE:GetKeyName()
-    return self.Name:gsub( "%s+", "" ):gsub("\-+", "")
+    return self.Name:gsub("%s+", ""):gsub("\-+", "")
 end
 
 --- Sets the coalition side for the combat zone
@@ -72,9 +72,7 @@ end
 -- @return COMBAT_ZONE The instance of COMBAT_ZONE
 function COMBAT_ZONE:SetCoalition(coalitionSide)
     self.Coalition = coalitionSide
-    if WZ_CONFIG.debug then
-        --MESSAGE:New("Zone " .. self.Name .. " coalition set to " .. tostring(coalitionSide), 5, "DEBUG"):ToAll()
-    end
+    self:UpdateAirbases()
     return self
 end
 
@@ -128,6 +126,26 @@ function COMBAT_ZONE:SpawnGroups()
         self.FirstSpawn = false
     end
     return self.SpawnedGroups
+end
+
+function COMBAT_ZONE:AnyUnitHasDifferentCoalition()
+    return countTableEntries(filterTable(self.SpawnedGroups), function(group)
+        return group:GetCoalition() ~= self.Coalition
+    end) > 0
+end
+
+function COMBAT_ZONE:GetAirbasesInZone()
+    local airbases = AIRBASE.GetAllAirbases()
+    local combatZone = self
+    return filterTable(airbases, function(airbase)
+        return combatZone.Zone:IsPointVec2InZone(airbase:GetZone():GetCoordinate())
+    end)
+end
+
+function COMBAT_ZONE:UpdateAirbases()
+    for _, airbase in ipairs(self:GetAirbasesInZone()) do
+        airbase:SetCoalition(self.Coalition)
+    end
 end
 
 --- Destroys all units in the combat zone
@@ -192,9 +210,6 @@ function COMBAT_ZONE:SetStatus(combatZoneStatus)
     if self.Status == COMBAT_ZONE_STATUS.NEUTRAL and not self:IsNeutral() then
         self.Status = COMBAT_ZONE_STATUS.CAPTURED
     end
-    if WZ_CONFIG.debug then
-        --MESSAGE:New("Zone " .. self.Name .. " status set to " .. self:GetReadableStatus(), 5, "DEBUG"):ToAll()
-    end
     return self
 end
 
@@ -239,7 +254,7 @@ function COMBAT_ZONE:Update()
         local offsetCoords = COORDINATE:New(centroidPoints.x + 20000, 0, centroidPoints.y - 15000)
         local markerText = self.Name
         local markerColor = self.ZoneColor
-        local textColor = {1, 1, 1}
+        local textColor = { 1, 1, 1 }
 
         if not self:IsNeutral() then
             if self:IsBlueSide() then
@@ -250,17 +265,15 @@ function COMBAT_ZONE:Update()
         end
 
         if WZ_CONFIG.zone.markers.enableCapturingStatus and self:IsBeingCaptured() then
-            textColor = {0, 0, 0}
-            markerColor = {1, 1, 0}
+            textColor = { 0, 0, 0 }
+            markerColor = { 1, 1, 0 }
             markerText = self.Name .. "\n\nIS BEING CAPTURED"
         end
 
         table.insert(self.MarkIds, offsetCoords:TextToAll(markerText, -1, textColor, 1.0, markerColor, .8, 10, true))
     end
-
     return self
 end
-
 
 function COMBAT_ZONE:ShouldSpawnGroups()
     -- Has never spawned any groups but is not neutral
