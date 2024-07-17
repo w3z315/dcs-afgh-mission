@@ -81,7 +81,7 @@ function COMBAT_ZONE_STATE_MACHINE:CanZoneBeCaptured(targetZone, adjacentZones)
 end
 
 function COMBAT_ZONE_STATE_MACHINE:UpdateCombatZonesStatus()
-    for _, zone in ipairs(combineTables(self.stateMachine.CapturableCombatZones)) do
+    for _, zone in ipairs(combineTables(self.CapturableCombatZones)) do
         zone:Update()
     end
 end
@@ -123,7 +123,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                         if Coalition == coalition.side.BLUE then
                             self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "%s is under attack by the USA, defend it!", self:GetZoneName() ), MESSAGE.Type.Information )
                         elseif Coalition == coalition.side.RED then
-                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "%s is under attack by the USA, defend it!", self:GetZoneName() ), MESSAGE.Type.Information )
+                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "%s is under attack by the Russia, defend it!", self:GetZoneName() ), MESSAGE.Type.Information )
                         else
                             -- Remove the adjPoint from the neutral table
                             self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.neutral, self.targetZone)
@@ -323,10 +323,13 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones(combatZoneChanged)
     if self:__CheckForWinners() and self.GameEnded then
         return
     end
-
     local allZones = combineTables(self.CombatZones)
+
+    self:ProcessZonesForCoalition(coalition.side.RED, allZones)
+    self:ProcessZonesForCoalition(coalition.side.BLUE, allZones)
+    self:ProcessZonesForCoalition(coalition.side.NEUTRAL, allZones)
+
     for _, combatZone in ipairs(allZones) do
-        combatZone:Update()
         if combatZone:ShouldSpawnGroups() then
             if self:CombatZoneCoalitionChanged(combatZone) or combatZone.Name == combatZoneChanged then
                 if combatZone:AnyUnitHasDifferentCoalition() then
@@ -337,9 +340,6 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones(combatZoneChanged)
             end
         end
     end
-    self:ProcessZonesForCoalition(coalition.side.RED, allZones)
-    self:ProcessZonesForCoalition(coalition.side.BLUE, allZones)
-    self:ProcessZonesForCoalition(coalition.side.NEUTRAL, allZones)
     if WZ_CONFIG.debug then
         MESSAGE:New("Updated", 2, "DEBUG"):ToAll()
         MESSAGE:New(string.format("Capturable combat zones: %d", countTableEntries(self.CapturableCombatZones)), 2, "DEBUG"):ToAll()
@@ -433,8 +433,8 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateClients()
                 MESSAGE:New(WZ_CONFIG.messages.missionIntro, 30, "BRIEFING"):ToClient(client)
                 if WZ_CONFIG.audio.missionIntroSound then
                     USERSOUND:New(WZ_CONFIG.audio.missionIntroSoundFile):ToClient(client)
-                    table.add(self.__JoinedPlayers, client:GetPlayerName())
                 end
+                table.add(self.__JoinedPlayers, client:GetPlayerName())
             end
         end
     end)
@@ -486,11 +486,11 @@ function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
 
     self:ProcessCombatZones(subdivisions)
 
-    self.__GameUpdateScheduler = SCHEDULER:New(self, function(stateMachine)
+    self.__GameUpdateScheduler = SCHEDULER:New(nil, function(stateMachine)
         stateMachine:UpdateAllZones()
     end, { self }, 0, WZ_CONFIG.gameplay.updateZonesEvery)
 
-    self.__PlayerCheckScheduler = SCHEDULER:New(self, function(stateMachine)
+    self.__PlayerCheckScheduler = SCHEDULER:New(nil, function(stateMachine)
         stateMachine:UpdateClients()
     end, { self }, 0, WZ_CONFIG.gameplay.updatePlayerStatusEvery)
     return self
@@ -529,7 +529,7 @@ function COMBAT_ZONE_STATE_MACHINE:GetZoneCount(coalitionSide)
 end
 
 function COMBAT_ZONE_STATE_MACHINE:EnableExpandingZones()
-    self.__ExpandingZonesScheduler = SCHEDULER:New(self, function(machine)
+    self.__ExpandingZonesScheduler = SCHEDULER:New(nil, function(machine)
         if machine:HasNeutralZones() then
             if WZ_CONFIG.debug then
                 MESSAGE:New("Zones expanded.", 3, "DEBUG"):ToAll()
@@ -542,7 +542,8 @@ end
 
 function COMBAT_ZONE_STATE_MACHINE:EnableExpandingZoneTimer()
     self:DrawExpandingZoneTimer()
-    self.__ExpandingZoneTimerScheduler = SCHEDULER:New(self, function(machine)
+    local scheduleObj = SCHEDULER:New(nil)
+    self.__ExpandingZoneTimerScheduler = scheduleObj:Schedule(nil, function(machine, scheduler)
         if WZ_CONFIG.debug then
             MESSAGE:New("Zone timer ticked", 1, "DEBUG"):ToAll()
         end
@@ -551,11 +552,12 @@ function COMBAT_ZONE_STATE_MACHINE:EnableExpandingZoneTimer()
         if not machine:HasNeutralZones() then
             machine:ClearMarkers()
             if machine.__ExpandingZoneTimerScheduler ~= nil then
-                SCHEDULER:Remove(machine.__ExpandingZoneTimerScheduler)
+                machine:F3({expandingScheduler = machine.__ExpandingZoneTimerScheduler})
+                scheduler:Remove()
                 machine.__ExpandingZoneTimerScheduler = nil
             end
         end
-    end, { self }, 1, 1)
+    end, { self, scheduleObj }, 1, 1)
     return self
 end
 

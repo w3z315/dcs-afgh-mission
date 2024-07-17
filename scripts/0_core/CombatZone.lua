@@ -46,7 +46,7 @@ function COMBAT_ZONE:New(name, polygon, coalition_side)
     self.Zone = ZONE_POLYGON:NewFromPointsArray(name, polygon:GetPoints())
     self.Coalition = coalition_side or coalition.side.NEUTRAL
     self.Point = polygon:GetCentroid()
-    self.CentroidArea = ZONE_RADIUS:New(self.Name .. "_CentroidZone", self.Point, 3000, true)
+    self.CentroidArea = ZONE_RADIUS:New(self.Name .. "_CentroidZone", self.Point, WZ_CONFIG.gameplay.spawnUnitsInRadius, true)
     return self
 end
 
