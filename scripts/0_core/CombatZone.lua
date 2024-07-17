@@ -31,7 +31,6 @@ COMBAT_ZONE = {
     FirstSpawn = true,
     IsAirBase = false,
     Status = COMBAT_ZONE_STATUS.NEUTRAL,
-    CanBeCaptured = false,
 }
 
 --- Creates a new instance of the COMBAT_ZONE class

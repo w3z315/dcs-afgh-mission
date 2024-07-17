@@ -16,9 +16,9 @@ if not WZ_CONFIG then
         gameplay = {
             enableExpandingZones = true, -- Automatically expand zones with some factors to make the mission quicker
             enableExpandingZoneTimer = true, -- Show a timer on the map that displays the time until the troops will capture adjacent zones
-            expandZonesEvery = 30, -- Auto expand every x seconds, default = 5min (300),
+            expandZonesEvery = 600, -- Auto expand every x seconds, default = 10min (600),
             winningSideProbability = 0.5, -- The probability the winning side automatically gets a new zone (0.0 - 1.0),
-            updateZonesEvery = 10, -- How often (seconds) do we want to check the zones for updates (e.g. Coalition), default 10 - Set to higher value if you are running into performance issues
+            updateZonesEvery = 20, -- How often (seconds) do we want to check the zones for updates (e.g. Coalition), default 20 - Set to higher value if you are running into performance issues
             updatePlayerStatusEvery = 3, -- How often (seconds) do we want to check players for updates (can be a lot faster)
             restartAfterMissionEnds = false, -- Should the mission restart when someone won?
             restartAfterSeconds = 60, -- After how many seconds should the mission restart?,
@@ -51,18 +51,63 @@ if not WZ_CONFIG then
                     alwaysPresentOnAirBase = false, -- Add this if it should be always present on airbases (ignores probability)
                 },
                 {
-                    name = "ZoneTemplate | AAA",
+                    name = "ZoneTemplate | AAA-1",
                     probability = 1.0,
                     alwaysPresentOnAirBase = true, -- Add this if it should be always present on airbases (ignores probability)
                 },
                 {
-                    name = "ZoneTemplate | AAA",
-                    probability = 1.0,
+                    name = "ZoneTemplate | AAA-2",
+                    probability = .35,
                     alwaysPresentOnAirBase = true, -- Add this if it should be always present on airbases (ignores probability)
                 },
                 {
-                    name = "ZoneTemplate | Bunker 1",
+                    name = "ZoneTemplate | AAA-3",
+                    probability = .35,
+                    alwaysPresentOnAirBase = true, -- Add this if it should be always present on airbases (ignores probability)
+                },
+                {
+                    name = "ZoneTemplate | Bunker-1",
                     probability = 1.0
+                },
+                {
+                    name = "ZoneTemplate | Bunker-1",
+                    probability = 0.35
+                },
+                {
+                    name = "ZoneTemplate | BTR-1",
+                    probability = 0.35
+                },
+                {
+                    name = "ZoneTemplate | BTR-2",
+                    probability = 0.35
+                },
+                {
+                    name = "ZoneTemplate | BTR-3",
+                    probability = 0.35
+                },
+                {
+                    name = "ZoneTemplate | BTR-4",
+                    probability = 0.35
+                },
+                {
+                    name = "ZoneTemplate | BTR-5",
+                    probability = 0.35
+                },
+                {
+                    name = "ZoneTemplate | T90-1",
+                    probability = 0.35
+                },
+                {
+                    name = "ZoneTemplate | T90-2",
+                    probability = 0.35
+                },
+                {
+                    name = "ZoneTemplate | RPG-1",
+                    probability = 0.35
+                },
+                {
+                    name = "ZoneTemplate | RPG-2",
+                    probability = 0.35
                 },
             }
         },
@@ -79,10 +124,6 @@ if not WZ_CONFIG then
             },
             defensive = {
                 {
-                    name = "ZoneTemplate | Tank-1",
-                    probability = 1.0
-                },
-                {
                     name = "ZoneTemplate | Tank-1-1",
                     probability = 1.0
                 },
@@ -91,11 +132,16 @@ if not WZ_CONFIG then
                     probability = 1.0
                 },
                 {
-                    name = "ZoneTemplate | Comms-1",
+                    name = "ZoneTemplate | Tank-3-1",
                     probability = 1.0
                 },
                 {
-                    name = "ZoneTemplate | FARP1",
+                    name = "ZoneTemplate | Comms-1-1",
+                    probability = 1.0,
+                    alwaysPresentOnAirBase = true,
+                },
+                {
+                    name = "ZoneTemplate | FARP-1-1",
                     probability = 1.0,
                     isAirBase = true,
                 }

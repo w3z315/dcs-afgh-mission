@@ -89,7 +89,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
         local adjacentZones = findAdjacentZones(allZones, targetZone, WZ_CONFIG.zone.lineMaxDistance)
 
         -- Check if this point can be captured at all
-        --if self:CanZoneBeCaptured(targetZone, adjacentZones) then
+        if self:CanZoneBeCaptured(targetZone, adjacentZones) then
             local targetZoneKey = targetZone:GetKeyName()
             -- Enable ZoneCaptureCoalition
             local capturableZone
@@ -113,6 +113,14 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                     end
                     if from ~= to then
                         self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURING)
+                        if Coalition == coalition.side.BLUE then
+                            self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "%s is under attack by the USA, defend it!", self:GetZoneName() ), MESSAGE.Type.Information )
+                        elseif Coalition == coalition.side.RED then
+                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "%s is under attack by the USA, defend it!", self:GetZoneName() ), MESSAGE.Type.Information )
+                        else
+                            -- Remove the adjPoint from the neutral table
+                            self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.neutral, self.targetZone)
+                        end
                     end
                     self.targetZone:Update()
                 end
@@ -173,7 +181,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
 
                 capturableZone:Start(3, 15):Guard()
             end
-        --end
+        end
 
         local neutralColor = { .35, .35, .35 }
         local sameCoalitionColor = coalitionSide == coalition.side.BLUE and { 0, 0, 1 } or { 1, 0, 0 }
