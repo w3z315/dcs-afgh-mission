@@ -488,7 +488,7 @@ function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
 
     self.__GameUpdateScheduler = SCHEDULER:New(self, function(stateMachine)
         stateMachine:UpdateAllZones()
-    end, { self }, 3, WZ_CONFIG.gameplay.updateZonesEvery)
+    end, { self }, 0, WZ_CONFIG.gameplay.updateZonesEvery)
 
     self.__PlayerCheckScheduler = SCHEDULER:New(self, function(stateMachine)
         stateMachine:UpdateClients()
