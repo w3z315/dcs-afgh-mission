@@ -29,13 +29,15 @@ COMBAT_ZONE = {
     SpawnedGroups = {},
     CentroidArea = nil,
     FirstSpawn = true,
-    IsAirBase = false,
+    HasAirBase = false,
+    Farp = nil,
     Status = COMBAT_ZONE_STATUS.NEUTRAL,
 }
 
 --- Creates a new instance of the COMBAT_ZONE class
 -- @param name string The name of the combat zone
 -- @param polygon POLYGON The polygon defining the zone
+-- @param farp STATIC A Farp static
 -- @param coalition_side number The coalition side for the zone
 -- @return COMBAT_ZONE A new instance of COMBAT_ZONE
 function COMBAT_ZONE:New(name, polygon, coalition_side)
@@ -66,12 +68,35 @@ function COMBAT_ZONE:GetKeyName()
     return self.Name:gsub("%s+", ""):gsub("\-+", "")
 end
 
+function COMBAT_ZONE:AssignFARP(farp)
+    self.Farp = farp
+    return self
+end
+
+function COMBAT_ZONE:SpawnFarp()
+    if self:HasFarp() then
+        if WZ_CONFIG.debug then
+            MESSAGE:New("Spawned Farp", 2, "DEBUG"):ToAll()
+        end
+        self.Farp:ReSpawnAt(self.CentroidArea:GetRandomCoordinate())
+    end
+end
+
+function COMBAT_ZONE:ReSpawnFarp()
+    local oldFarp = self.Farp
+    self:SpawnFarp()
+    oldFarp:Destroy()
+end
+
+function COMBAT_ZONE:HasFarp()
+    return self.Farp ~= nil
+end
+
 --- Sets the coalition side for the combat zone
 -- @param coalitionSide number The coalition side to set
 -- @return COMBAT_ZONE The instance of COMBAT_ZONE
 function COMBAT_ZONE:SetCoalition(coalitionSide)
     self.Coalition = coalitionSide
-    self:UpdateAirbases()
     return self
 end
 
@@ -82,7 +107,7 @@ function COMBAT_ZONE:SpawnGroups()
         local groupName = groupSettings.name
         local shouldSpawn = (math.random() <= groupSettings.probability)
 
-        if groupSettings.alwaysPresentOnAirBase and self.IsAirBase then
+        if groupSettings.alwaysPresentOnAirBase and self.HasAirBase then
             shouldSpawn = true
         end
         if shouldSpawn then
@@ -103,7 +128,7 @@ function COMBAT_ZONE:SpawnGroups()
         local staticName = staticSettings.name
         local shouldSpawn = (math.random() <= staticSettings.probability)
 
-        if staticSettings.alwaysPresentOnAirBase and self.IsAirBase then
+        if staticSettings.alwaysPresentOnAirBase and self.HasAirBase then
             shouldSpawn = true
         end
 
@@ -135,9 +160,8 @@ end
 
 function COMBAT_ZONE:GetAirbasesInZone()
     local airbases = AIRBASE.GetAllAirbases()
-    local combatZone = self
     return filterTable(airbases, function(airbase)
-        return combatZone.Zone:IsPointVec2InZone(airbase:GetZone():GetCoordinate())
+        return airbase:GetZone() ~= nil and self.Zone:IsPointVec2InZone(airbase:GetZone():GetCoordinate())
     end)
 end
 
@@ -218,8 +242,10 @@ function COMBAT_ZONE:Update()
     -- Set color based on coalition and status
     if self.Coalition == coalition.side.BLUE then
         self.ZoneColor = { 0, 0, 1 }
+        self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
     elseif self.Coalition == coalition.side.RED then
         self.ZoneColor = { 1, 0, 0 }
+        self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
     else
         self.ZoneColor = { 0.5, 0.5, 0.5 }
     end
@@ -233,15 +259,16 @@ function COMBAT_ZONE:Update()
     if isAirbaseInZone(self.Zone, coalition.side.BLUE) then
         self:SetCoalition(coalition.side.BLUE)
         self.ZoneColor = { 0, 0, 1 }
-        self.IsAirBase = true
+        self.HasAirBase = true
     elseif isAirbaseInZone(self.Zone, coalition.side.RED) then
         self:SetCoalition(coalition.side.RED)
         self.ZoneColor = { 1, 0, 0 }
-        self.IsAirBase = true
+        self.HasAirBase = true
     else
-        self.IsAirBase = false
+        self.HasAirBase = false
     end
 
+    self:UpdateAirbases()
     -- Clear old markings and draw new ones
     self:ClearMarkings()
     self:DrawMarkings(self.Polygon:GetCoordinates())
@@ -285,6 +312,13 @@ function COMBAT_ZONE:ShouldSpawnGroups()
         end
     end
 
+    return false
+end
+
+function COMBAT_ZONE:ShouldSpawnFarp()
+    if not self:HasFarp() or self.FirstSpawn then
+        return true
+    end
     return false
 end
 

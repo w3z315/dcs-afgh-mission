@@ -4,8 +4,29 @@ function isAirbaseInZone(zone, coalition)
     -- Iterate over all airbases to check if any are within the zone
     for _, airbase in ipairs(airbases) do
         local airbaseZone = airbase:GetZone()
-        if zone:IsPointVec2InZone(airbaseZone:GetCoordinate()) then
-            return true
+        if airbaseZone == nil then
+            -- Check if airbase has VEC2
+            local airbaseVec2 = airbase:GetVec2()
+
+            if airbaseVec2 then
+                if airbase.isShip then
+                    local unit=UNIT:FindByName(airbase.AirbaseName)
+                    if unit then
+                        airbase.AirbaseZone=ZONE_UNIT:New(airbase.AirbaseName, unit, 2500)
+                    end
+                else
+                    airbase.AirbaseZone=ZONE_RADIUS:New(airbase.AirbaseName, airbaseVec2, 2500)
+                end
+            end
+            airbaseZone = airbase:GetZone()
+        end
+        if airbaseZone ~= nil then
+            if zone:IsPointVec2InZone(airbaseZone:GetCoordinate()) then
+                return true
+            end
+        else
+            UTILS.PrintTableToLog(airbase)
+            MESSAGE:New("AIRBASE HAS NO ZONE", 3, "DEBUG"):ToAll()
         end
     end
 

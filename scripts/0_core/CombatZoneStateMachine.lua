@@ -7,7 +7,8 @@
 ---@field __GameUpdateScheduler number
 ---@field __ExpandingZonesScheduler number
 ---@field __ExpandingZoneTimerScheduler number
----@field __SubZoneRadius number
+---@field __SubZoneRadiusY number
+---@field __SubZoneRadiusX number
 ---@field __DrawnLines table<string, boolean>
 COMBAT_ZONE_STATE_MACHINE = {
     ClassName = "COMBAT_ZONE_STATE_MACHINE",
@@ -38,12 +39,14 @@ COMBAT_ZONE_STATE_MACHINE = {
     __GameUpdateScheduler = nil,
     __ExpandingZonesScheduler = nil,
     __ExpandingZoneTimerScheduler = nil,
-    __SubZoneRadius = nil,
+    __SubZoneRadiusY = 0,
+    __SubZoneRadiusX = 0,
     __DrawnLines = {},
     __TimerMarkerId = nil,
     __TimeLeftUntilNextExpandingZone = 0,
     __Clients = {},
     __JoinedPlayers = {},
+    __UsedFarps = {},
 }
 
 --- Gets a new instance
@@ -53,22 +56,6 @@ function COMBAT_ZONE_STATE_MACHINE:New()
     self.__TimeLeftUntilNextExpandingZone = WZ_CONFIG.gameplay.expandZonesEvery
     self.__Clients = SET_CLIENT:New():FilterActive():FilterStart()
     return self
-end
-
---- Creates a hexagon polygon
---- @param centerX number The x center coordinate
---- @param centerY number The y center coordinate
---- @param verticalOffset number Amount of y offset
---- @param horizontalOffset number Amount of x offset
-function COMBAT_ZONE_STATE_MACHINE:CreateHexagon(centerX, centerY, verticalOffset, horizontalOffset)
-    local points = {}
-    for i = 0, 5 do
-        local angle = (math.pi / 3) * i - (math.pi / 6)
-        local x = centerX + self.__SubZoneRadius * math.cos(angle) + verticalOffset
-        local y = centerY + self.__SubZoneRadius * math.sin(angle) + horizontalOffset
-        table.insert(points, { x = x, y = y })
-    end
-    return POLYGON:New(unpack(points))
 end
 
 --- Checks if zone can be captured based on adjacent zones
@@ -91,6 +78,9 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
         return combatZone.Coalition == coalitionSide and combatZone
     end)
 
+    if WZ_CONFIG.debug then
+        MESSAGE:New(string.format("CombatZones to process: %d", countTableEntries(filteredZones)) , 5, "DEBUG"):ToAll()
+    end
     for _, combatZone in ipairs(filteredZones) do
         local targetZone = combatZone
         local adjacentZones = findAdjacentZones(allZones, targetZone, WZ_CONFIG.zone.lineMaxDistance)
@@ -106,7 +96,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                 capturableZone.targetZone = targetZone
             else
                 if WZ_CONFIG.debug then
-                    MESSAGE:New("UPDATING CAPTURABLE ZONES" , 5, "DEBUG"):ToAll()
+                    MESSAGE:New("Creating capturable zone" , 5, "DEBUG"):ToAll()
                 end
                 self.CapturableCombatZones[targetZoneKey] = ZONE_CAPTURE_COALITION:New(targetZone.Zone, targetZone.Coalition, {Unit.Category.AIRPLANE, Unit.Category.HELICOPTER, Unit.Category.GROUND_UNIT})
                 capturableZone = self.CapturableCombatZones[targetZoneKey]
@@ -182,6 +172,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                             -- Remove the adjPoint from the neutral table
                             self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.neutral, self.targetZone)
                         end
+                        self.targetZone:ReSpawnFarp()
                         -- Update all zones
                         self.stateMachine:UpdateCombatZonesStatus()
 
@@ -190,7 +181,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                     end
                 end
 
-                capturableZone:Start(3, 15):Guard()
+                capturableZone:Start(3, 15)
             end
 
             local neutralColor = { .35, .35, .35 }
@@ -233,34 +224,6 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                         end
                     end
                     drawnOppositeLine = false
-                end
-            end
-        end
-    end
-end
-
---- Processes all combat zones
---- @param subdivisions number The amount of subdivision to create
-function COMBAT_ZONE_STATE_MACHINE:ProcessCombatZones(subdivisions)
-    for i = 0, subdivisions - 1 do
-        for j = 0, subdivisions - 1 do
-            local offsetX = i * (self.__SubZoneRadius * 2)
-            local offsetY = j * (self.__SubZoneRadius * math.sqrt(3.8))
-            if j % 2 == 1 then
-                offsetX = offsetX + (self.__SubZoneRadius * 0.75)
-            end
-            local centerX = self.MainZone.minX + offsetX + self.__SubZoneRadius
-            local centerY = self.MainZone.minY + offsetY + self.__SubZoneRadius
-            local zoneName = string.format(WZ_CONFIG.zone.markers.textFormat, i + 1, j + 1)
-            local polygon = self:CreateHexagon(centerX, centerY, WZ_CONFIG.zone.yOffset, WZ_CONFIG.zone.xOffset)
-            if polygon then
-                local combatZone = COMBAT_ZONE:New(zoneName, polygon):Update()
-                if combatZone.Coalition == coalition.side.BLUE then
-                    table.insert(self.CombatZones.blue, combatZone)
-                elseif combatZone.Coalition == coalition.side.RED then
-                    table.insert(self.CombatZones.red, combatZone)
-                elseif combatZone.Coalition == coalition.side.NEUTRAL then
-                    table.insert(self.CombatZones.neutral, combatZone)
                 end
             end
         end
@@ -316,7 +279,7 @@ function COMBAT_ZONE_STATE_MACHINE:CombatZoneCoalitionChanged(combatZone)
     return false
 end
 
-function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones(combatZoneChanged)
+function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
     if WZ_CONFIG.debug then
         MESSAGE:New("Updating", 2, "DEBUG"):ToAll()
     end
@@ -331,7 +294,7 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones(combatZoneChanged)
 
     for _, combatZone in ipairs(allZones) do
         if combatZone:ShouldSpawnGroups() then
-            if self:CombatZoneCoalitionChanged(combatZone) or combatZone.Name == combatZoneChanged then
+            if self:CombatZoneCoalitionChanged(combatZone) then
                 if combatZone:AnyUnitHasDifferentCoalition() then
                     combatZone:DestroyGroups()
                 end
@@ -440,6 +403,73 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateClients()
     end)
 end
 
+function COMBAT_ZONE_STATE_MACHINE:GetUnusedFarp()
+    local allFarps = WZ_CONFIG.statics.farps
+    for _, staticName in ipairs(allFarps) do
+        if not table.contains(self.__UsedFarps, staticName) then
+            table.add(self.__UsedFarps, staticName)
+            return STATIC:FindByName(staticName)
+        end
+    end
+end
+
+--- Processes all combat zones
+--- @param spacingX number The spacing between zones along the X axis
+--- @param spacingY number The spacing between zones along the Y axis
+function COMBAT_ZONE_STATE_MACHINE:ProcessCombatZones(spacingX, spacingY)
+    local hexHeight = self.__SubZoneRadiusY * 2
+    local hexWidth = self.__SubZoneRadiusX * math.sqrt(3)
+
+    local subdivisionsY = math.floor((self.MainZone.width - spacingX) / (hexHeight + spacingX))
+    local subdivisionsX = math.floor((self.MainZone.height - spacingY) / (hexWidth + spacingY))
+
+    for i = 0, subdivisionsY - 1 do
+        for j = 0, subdivisionsX - 1 do
+            local offsetX = i * (hexHeight + spacingY)
+            local offsetY = j * (hexWidth + spacingX)
+            if j % 2 == 1 then
+                offsetX = offsetX + (hexHeight / 2)
+            end
+            local centerX = self.MainZone.minX + offsetX + self.__SubZoneRadiusY
+            local centerY = self.MainZone.minY + offsetY + self.__SubZoneRadiusX
+            local zoneName = string.format(WZ_CONFIG.zone.markers.textFormat, i + 1, j + 1)
+            local polygon = self:CreateHexagon(centerX, centerY, WZ_CONFIG.zone.yOffset, WZ_CONFIG.zone.xOffset)
+            if polygon then
+
+                local combatZone = COMBAT_ZONE:New(zoneName, polygon):Update()
+                combatZone:AssignFARP(self:GetUnusedFarp(combatZone.Coalition))
+                combatZone:SpawnFarp()
+
+                --AIRBASE:Register(combatZone.Farp.Name)
+
+                if combatZone.Coalition == coalition.side.BLUE then
+                    table.insert(self.CombatZones.blue, combatZone)
+                elseif combatZone.Coalition == coalition.side.RED then
+                    table.insert(self.CombatZones.red, combatZone)
+                elseif combatZone.Coalition == coalition.side.NEUTRAL then
+                    table.insert(self.CombatZones.neutral, combatZone)
+                end
+            end
+        end
+    end
+end
+
+--- Creates a hexagon polygon
+--- @param centerX number The x center coordinate
+--- @param centerY number The y center coordinate
+--- @param verticalOffset number Amount of y offset
+--- @param horizontalOffset number Amount of x offset
+function COMBAT_ZONE_STATE_MACHINE:CreateHexagon(centerX, centerY, verticalOffset, horizontalOffset)
+    local points = {}
+    for i = 0, 5 do
+        local angle = (math.pi / 3) * i - (math.pi / 6)
+        local x = centerX + self.__SubZoneRadiusY * math.cos(angle) + verticalOffset
+        local y = centerY + self.__SubZoneRadiusX * math.sin(angle) + horizontalOffset
+        table.insert(points, { x = x, y = y })
+    end
+    return POLYGON:New(unpack(points))
+end
+
 --- Start the CombatStateMachine, generate Zones and start the round
 --- @param mapZone ZONE
 function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
@@ -478,13 +508,15 @@ function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
         MESSAGE:New(string.format("Main Zone Center: x = %f, y = %f", self.MainZone.centerX, self.MainZone.centerY), 25, "DEBUG"):ToAll()
     end
 
-    -- Define the number of subdivisions (x * x grid)
-    local subdivisions = WZ_CONFIG.zone.subdivisions
-
     -- Calculate the size of each subdivided zone (hexagon radius)
-    self.__SubZoneRadius = (math.min(self.MainZone.width, self.MainZone.height) - 0 * (subdivisions - 1)) / subdivisions / 2
+    self.__SubZoneRadiusY = WZ_CONFIG.zone.subZoneRadiusY
+    self.__SubZoneRadiusX = WZ_CONFIG.zone.subZoneRadiusX
 
-    self:ProcessCombatZones(subdivisions)
+    -- Define the spacing between zones
+    local spacingX = WZ_CONFIG.zone.spacingX
+    local spacingY = WZ_CONFIG.zone.spacingY
+
+    self:ProcessCombatZones(spacingX, spacingY)
 
     self.__GameUpdateScheduler = SCHEDULER:New(nil, function(stateMachine)
         stateMachine:UpdateAllZones()
@@ -495,6 +527,7 @@ function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
     end, { self }, 0, WZ_CONFIG.gameplay.updatePlayerStatusEvery)
     return self
 end
+
 
 function COMBAT_ZONE_STATE_MACHINE:DrawExpandingZoneTimer()
     local x = self.MainZone.maxX + 100000
@@ -612,10 +645,12 @@ function COMBAT_ZONE_STATE_MACHINE:Stop()
     self.__GameUpdateScheduler = nil
     self.__ExpandingZonesScheduler = nil
     self.__ExpandingZoneTimerScheduler = nil
-    self.__SubZoneRadius = nil
+    self.__SubZoneRadiusY = nil
+    self.__SubZoneRadiusX = nil
     self.__DrawnLines = {}
     self.__Clients = {}
     self.__JoinedPlayers = {}
     self.__TimerMarkerId = nil
+    self.__UsedFarps = {}
     self.__TimeLeftUntilNextExpandingZone = WZ_CONFIG.gameplay.expandZonesEvery
 end

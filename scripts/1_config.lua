@@ -1,9 +1,12 @@
 if not WZ_CONFIG then
     WZ_CONFIG = {
-        debug = false, -- Show debug messages
+        debug = true, -- Show debug messages
         zone = {
             name = "Zone_Polygon_Area", -- The name of the polygon map marking in which to generate the combat zones
-            subdivisions = 5, -- Grid size (e.g. 6 = 6x6, 7 = 7x7, etc.)
+            subZoneRadiusX = 40000,
+            subZoneRadiusY = 40000,
+            spacingX = 500,
+            spacingY = 500,
             lineMaxDistance = 83000, -- Max distance between two zones to count as adjacent
             yOffset = 0, -- Move all markers up and down
             xOffset = 0, -- Move all markers left and right
@@ -11,18 +14,19 @@ if not WZ_CONFIG then
                 enable = true, -- Show markers in the area of the zones,
                 enableCapturingStatus = true, -- If set to true the map marker will show that the site is being captured
                 textFormat = "Capture Zone %d-%d" -- Text that the markers show, accepts two %d for Row / Col index
-            }
+            },
+            farpParkingZoneName = "FARP_Parking_Zone", -- If a coalition is neutral this is where the farps will be parked.
         },
         gameplay = {
             enableExpandingZones = true, -- Automatically expand zones with some factors to make the mission quicker
             enableExpandingZoneTimer = true, -- Show a timer on the map that displays the time until the troops will capture adjacent zones
-            expandZonesEvery = 600, -- Auto expand every x seconds, default = 10min (600),
+            expandZonesEvery = 30, -- Auto expand every x seconds, default = 10min (600),
             winningSideProbability = 0.5, -- The probability the winning side automatically gets a new zone (0.0 - 1.0),
             updateZonesEvery = 3, -- How often (seconds) do we want to check the zones for updates (e.g. Coalition), default 3 - Set to higher value if you are running into performance issues
             updatePlayerStatusEvery = 3, -- How often (seconds) do we want to check players for updates (can be a lot faster)
             restartAfterMissionEnds = false, -- Should the mission restart when someone won?
             restartAfterSeconds = 60, -- After how many seconds should the mission restart?,
-            spawnUnitsInRadius = 1500, -- Which radius should the spawn zone have? (metric) Default 1500
+            spawnUnitsInRadius = 8000, -- Which radius should the spawn zone have? (metric) Default 1500
         },
         audio = {
             missionIntroSound = true, -- Play a intro when a user joins the mission for the first time
@@ -123,17 +127,34 @@ if not WZ_CONFIG then
                     prettyName = "Red Headquarters", -- A pretty name for texts to players
                 },
             },
+            farps = {
+                "FARP-1-1",
+                "FARP-2-1",
+                "FARP-3-1",
+                "FARP-4-1",
+                "FARP-5-1",
+                "FARP-6-1",
+                "FARP-7-1",
+                "FARP-8-1",
+                "FARP-9-1",
+                "FARP-10-1",
+                "FARP-11-1",
+                "FARP-12-1",
+                "FARP-13-1",
+                "FARP-14-1",
+                "FARP-15-1",
+            },
             defensive = {
                 {
-                    name = "ZoneTemplate | Tank-1-1",
+                    name = "ZoneTemplate | Tank-1",
                     probability = 1.0
                 },
                 {
-                    name = "ZoneTemplate | Tank-2-1",
+                    name = "ZoneTemplate | Tank-2",
                     probability = 1.0
                 },
                 {
-                    name = "ZoneTemplate | Tank-3-1",
+                    name = "ZoneTemplate | Tank-3",
                     probability = 1.0
                 },
                 {
@@ -141,11 +162,6 @@ if not WZ_CONFIG then
                     probability = 1.0,
                     alwaysPresentOnAirBase = true,
                 },
-                {
-                    name = "ZoneTemplate | FARP-1-1",
-                    probability = 1.0,
-                    isAirBase = true,
-                }
             }
         },
     }
