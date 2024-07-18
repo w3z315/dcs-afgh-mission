@@ -68,7 +68,7 @@ function COMBAT_ZONE_STATE_MACHINE:CanZoneBeCaptured(targetZone, adjacentZones)
 end
 
 function COMBAT_ZONE_STATE_MACHINE:UpdateCombatZonesStatus()
-    for _, zone in ipairs(combineTables(self.CapturableCombatZones)) do
+    for _, zone in ipairs(combineTables(self.CombatZones)) do
         zone:Update()
     end
 end
@@ -113,10 +113,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                         if Coalition == coalition.side.BLUE then
                             self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "%s is under attack by the USA, defend it!", self:GetZoneName() ), MESSAGE.Type.Information )
                         elseif Coalition == coalition.side.RED then
-                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "%s is under attack by the Russia, defend it!", self:GetZoneName() ), MESSAGE.Type.Information )
-                        else
-                            -- Remove the adjPoint from the neutral table
-                            self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.neutral, self.targetZone)
+                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "%s is under attack by Russia, defend it!", self:GetZoneName() ), MESSAGE.Type.Information )
                         end
                     end
                     self.targetZone:Update()
@@ -162,17 +159,16 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                             self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "%s is captured by the USA, we lost it!", self:GetZoneName() ), MESSAGE.Type.Information )
                             self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "We captured %s, Excellent job!", self:GetZoneName() ), MESSAGE.Type.Information )
                             table.insert(self.stateMachine.CombatZones.blue, self.targetZone)
-                            self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.blue, self.targetZone)
+                            self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.red, self.targetZone)
                         elseif Coalition == coalition.side.RED then
                             self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "%s is captured by Russia, we lost it!", self:GetZoneName() ), MESSAGE.Type.Information )
                             self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "We captured %s, Excellent job!", self:GetZoneName() ), MESSAGE.Type.Information )
                             table.insert(self.stateMachine.CombatZones.red, self.targetZone)
-                            self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.red, self.targetZone)
+                            self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.blue, self.targetZone)
                         else
                             -- Remove the adjPoint from the neutral table
                             self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.neutral, self.targetZone)
                         end
-                        --self.targetZone:ReSpawnFarp()
                         -- Update all zones
                         self.stateMachine:UpdateCombatZonesStatus()
 
@@ -300,6 +296,7 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
                 end
                 table.insert(self.SpawnedGroups, combatZone:SpawnGroups())
                 self.__CombatZoneCoalitionMap[combatZone.Name] = combatZone.Coalition
+                combatZone:Update()
             end
         end
     end

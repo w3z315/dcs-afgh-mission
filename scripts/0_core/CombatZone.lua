@@ -161,11 +161,15 @@ end
 
 function COMBAT_ZONE:UpdateAirbases()
     for _, airbase in ipairs(getAnyAirbases(self.Zone, nil, Airbase.Category.SHIP)) do
-        MESSAGE:New(string.format("SETTING AIRBASE COALITION FOR: %s", airbase.AirbaseName), 2, "DEBUG"):ToAll()
+        if WZ_CONFIG.debug then
+            MESSAGE:New(string.format("SETTING AIRBASE COALITION FOR: %s", airbase.AirbaseName), 2, "DEBUG"):ToAll()
+        end
         airbase:SetCoalition(self.Coalition)
     end
     for _, airbase in ipairs(getAnyAirbases(self.Zone, nil, Airbase.Category.AIRDROME)) do
-        MESSAGE:New(string.format("SETTING AIRBASE COALITION FOR: %s", airbase.AirbaseName), 2, "DEBUG"):ToAll()
+        if WZ_CONFIG.debug then
+            MESSAGE:New(string.format("SETTING AIRBASE COALITION FOR: %s", airbase.AirbaseName), 2, "DEBUG"):ToAll()
+        end
         airbase:SetCoalition(self.Coalition)
     end
 end
@@ -264,6 +268,7 @@ function COMBAT_ZONE:Update()
     if WZ_CONFIG.debug then
         -- Debug message to confirm color and status change
         MESSAGE:New("Updating zone: " .. self.Name .. " with coalition: " .. tostring(self.Coalition) .. " and status: " .. self:GetReadableStatus(), 5, "DEBUG"):ToAll()
+        self:I("Updating zone: " .. self.Name .. " with coalition: " .. tostring(self.Coalition) .. " and status: " .. self:GetReadableStatus(), 5, "DEBUG"):ToAll()
     end
 
     self:UpdateAirbases()
