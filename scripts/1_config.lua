@@ -1,6 +1,6 @@
 if not WZ_CONFIG then
     WZ_CONFIG = {
-        debug = true, -- Show debug messages
+        debug = false, -- Show debug messages
         zone = {
             name = "Zone_Polygon_Area", -- The name of the polygon map marking in which to generate the combat zones
             subZoneRadiusX = 40000,
@@ -15,12 +15,11 @@ if not WZ_CONFIG then
                 enableCapturingStatus = true, -- If set to true the map marker will show that the site is being captured
                 textFormat = "Capture Zone %d-%d" -- Text that the markers show, accepts two %d for Row / Col index
             },
-            farpParkingZoneName = "FARP_Parking_Zone", -- If a coalition is neutral this is where the farps will be parked.
         },
         gameplay = {
             enableExpandingZones = true, -- Automatically expand zones with some factors to make the mission quicker
             enableExpandingZoneTimer = true, -- Show a timer on the map that displays the time until the troops will capture adjacent zones
-            expandZonesEvery = 10, -- Auto expand every x seconds, default = 10min (600),
+            expandZonesEvery = 900, -- Auto expand every x seconds, default = 15min (900),
             winningSideProbability = 0.5, -- The probability the winning side automatically gets a new zone (0.0 - 1.0),
             updateZonesEvery = 3, -- How often (seconds) do we want to check the zones for updates (e.g. Coalition), default 3 - Set to higher value if you are running into performance issues
             updatePlayerStatusEvery = 3, -- How often (seconds) do we want to check players for updates (can be a lot faster)
