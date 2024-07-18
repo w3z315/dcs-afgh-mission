@@ -25,6 +25,7 @@ COMBAT_ZONE = {
     LineMarkIds = {},
     Name = "",
     Coalition = -2,
+    Zone = {},
     ZoneColor = { .35, .35, .35 },
     SpawnedGroups = {},
     CentroidArea = nil,
@@ -78,7 +79,7 @@ function COMBAT_ZONE:SpawnFarp()
         if WZ_CONFIG.debug then
             MESSAGE:New("Spawned Farp", 2, "DEBUG"):ToAll()
         end
-        self.Farp:ReSpawnAt(self.CentroidArea:GetRandomCoordinate())
+        self.Farp:ReSpawnAt(COORDINATE:NewFromVec2(self.Farp:GetVec2()))
     end
 end
 
@@ -158,15 +159,13 @@ function COMBAT_ZONE:AnyUnitHasDifferentCoalition()
     end) > 0
 end
 
-function COMBAT_ZONE:GetAirbasesInZone()
-    local airbases = AIRBASE.GetAllAirbases()
-    return filterTable(airbases, function(airbase)
-        return airbase:GetZone() ~= nil and self.Zone:IsPointVec2InZone(airbase:GetZone():GetCoordinate())
-    end)
-end
-
 function COMBAT_ZONE:UpdateAirbases()
-    for _, airbase in ipairs(self:GetAirbasesInZone()) do
+    for _, airbase in ipairs(getAnyAirbases(self.Zone, nil, Airbase.Category.SHIP)) do
+        MESSAGE:New(string.format("SETTING AIRBASE COALITION FOR: %s", airbase.AirbaseName), 2, "DEBUG"):ToAll()
+        airbase:SetCoalition(self.Coalition)
+    end
+    for _, airbase in ipairs(getAnyAirbases(self.Zone, nil, Airbase.Category.AIRDROME)) do
+        MESSAGE:New(string.format("SETTING AIRBASE COALITION FOR: %s", airbase.AirbaseName), 2, "DEBUG"):ToAll()
         airbase:SetCoalition(self.Coalition)
     end
 end
@@ -239,6 +238,19 @@ end
 --- Updates the combat zone
 -- @return COMBAT_ZONE The updated instance of COMBAT_ZONE
 function COMBAT_ZONE:Update()
+    -- Update for airbase
+    if hasAnyAirbases(self.Zone, coalition.side.BLUE, Airbase.Category.AIRDROME) then
+        self:SetCoalition(coalition.side.BLUE)
+        self.ZoneColor = { 0, 0, 1 }
+        self.HasAirBase = true
+    elseif hasAnyAirbases(self.Zone, coalition.side.RED, Airbase.Category.AIRDROME) then
+        self:SetCoalition(coalition.side.RED)
+        self.ZoneColor = { 1, 0, 0 }
+        self.HasAirBase = true
+    else
+        self.HasAirBase = false
+    end
+
     -- Set color based on coalition and status
     if self.Coalition == coalition.side.BLUE then
         self.ZoneColor = { 0, 0, 1 }
@@ -249,23 +261,9 @@ function COMBAT_ZONE:Update()
     else
         self.ZoneColor = { 0.5, 0.5, 0.5 }
     end
-
     if WZ_CONFIG.debug then
         -- Debug message to confirm color and status change
         MESSAGE:New("Updating zone: " .. self.Name .. " with coalition: " .. tostring(self.Coalition) .. " and status: " .. self:GetReadableStatus(), 5, "DEBUG"):ToAll()
-    end
-
-    -- Update for airbase
-    if isAirbaseInZone(self.Zone, coalition.side.BLUE) then
-        self:SetCoalition(coalition.side.BLUE)
-        self.ZoneColor = { 0, 0, 1 }
-        self.HasAirBase = true
-    elseif isAirbaseInZone(self.Zone, coalition.side.RED) then
-        self:SetCoalition(coalition.side.RED)
-        self.ZoneColor = { 1, 0, 0 }
-        self.HasAirBase = true
-    else
-        self.HasAirBase = false
     end
 
     self:UpdateAirbases()

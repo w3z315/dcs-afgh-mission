@@ -1,4 +1,5 @@
 WZ_CONFIG = WZ_CONFIG or {}
+BASE:TraceOn(WZ_CONFIG.debug)
 
 -- Define the main zone
 local mainZone = POLYGON:FindOnMap(WZ_CONFIG.zone.name)

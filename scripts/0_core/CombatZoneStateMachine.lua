@@ -172,7 +172,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                             -- Remove the adjPoint from the neutral table
                             self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.neutral, self.targetZone)
                         end
-                        self.targetZone:ReSpawnFarp()
+                        --self.targetZone:ReSpawnFarp()
                         -- Update all zones
                         self.stateMachine:UpdateCombatZonesStatus()
 
@@ -232,9 +232,9 @@ end
 
 function COMBAT_ZONE_STATE_MACHINE:GetWinner()
     local blueCount, redCount = countTableEntries(self.CombatZones.blue), countTableEntries(self.CombatZones.red)
-    if redCount == 0 then
+    if redCount == 0 and blueCount > 0 then
         return coalition.side.BLUE
-    elseif blueCount == 0 then
+    elseif blueCount == 0 and redCount > 0 then
         return coalition.side.RED
     end
     return coalition.side.NEUTRAL
@@ -283,7 +283,7 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
     if WZ_CONFIG.debug then
         MESSAGE:New("Updating", 2, "DEBUG"):ToAll()
     end
-    if self:__CheckForWinners() and self.GameEnded then
+    if self.GameEnded or self:__CheckForWinners() then
         return
     end
     local allZones = combineTables(self.CombatZones)
@@ -434,13 +434,15 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessCombatZones(spacingX, spacingY)
             local centerY = self.MainZone.minY + offsetY + self.__SubZoneRadiusX
             local zoneName = string.format(WZ_CONFIG.zone.markers.textFormat, i + 1, j + 1)
             local polygon = self:CreateHexagon(centerX, centerY, WZ_CONFIG.zone.yOffset, WZ_CONFIG.zone.xOffset)
+            for _, airbase in ipairs(AIRBASE.GetAllAirbases()) do
+                airbase:SetAutoCapture(false)
+            end
             if polygon then
 
-                local combatZone = COMBAT_ZONE:New(zoneName, polygon):Update()
+                local combatZone = COMBAT_ZONE:New(zoneName, polygon)
                 combatZone:AssignFARP(self:GetUnusedFarp(combatZone.Coalition))
-                combatZone:SpawnFarp()
-
-                --AIRBASE:Register(combatZone.Farp.Name)
+                combatZone:Update()
+                --combatZone:SpawnFarp()
 
                 if combatZone.Coalition == coalition.side.BLUE then
                     table.insert(self.CombatZones.blue, combatZone)

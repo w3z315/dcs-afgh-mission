@@ -1,36 +1,68 @@
-function isAirbaseInZone(zone, coalition)
-    local airbases = AIRBASE.GetAllAirbases(coalition)
+function hasAnyAirbases(zone, coalition, airbaseCategory)
+    local airbases = AIRBASE.GetAllAirbases(coalition, airbaseCategory)
 
     -- Iterate over all airbases to check if any are within the zone
     for _, airbase in ipairs(airbases) do
         local airbaseZone = airbase:GetZone()
-        if airbaseZone == nil then
-            -- Check if airbase has VEC2
-            local airbaseVec2 = airbase:GetVec2()
-
-            if airbaseVec2 then
-                if airbase.isShip then
-                    local unit=UNIT:FindByName(airbase.AirbaseName)
-                    if unit then
-                        airbase.AirbaseZone=ZONE_UNIT:New(airbase.AirbaseName, unit, 2500)
-                    end
-                else
-                    airbase.AirbaseZone=ZONE_RADIUS:New(airbase.AirbaseName, airbaseVec2, 2500)
-                end
-            end
-            airbaseZone = airbase:GetZone()
-        end
         if airbaseZone ~= nil then
-            if zone:IsPointVec2InZone(airbaseZone:GetCoordinate()) then
+            if zone:IsCoordinateInZone(airbaseZone:GetCoordinate()) then
                 return true
             end
-        else
-            UTILS.PrintTableToLog(airbase)
-            MESSAGE:New("AIRBASE HAS NO ZONE", 3, "DEBUG"):ToAll()
         end
     end
 
     return false
+end
+function getAnyAirbases(zone, coalition, airbaseCategory)
+    local airbases = AIRBASE.GetAllAirbases(coalition, airbaseCategory)
+    local airbasesInZone = {}
+    -- Iterate over all airbases to check if any are within the zone
+    for _, airbase in ipairs(airbases) do
+        local airbaseZone = workaroundAirbaseZone(airbase)
+        if airbaseZone ~= nil then
+            if zone:IsCoordinateInZone(airbaseZone:GetCoordinate()) then
+                if WZ_CONFIG.debug then
+                    MESSAGE:New(string.format("AIRBASE IN ZONE: %s", airbase.AirbaseName), 3, "DEBUG"):ToAll()
+                end
+                table.add(airbasesInZone, airbase)
+            end
+        else
+            if WZ_CONFIG.debug then
+                MESSAGE:New(string.format("AIRBASE HAS NO ZONE: %s", airbase.AirbaseName), 3, "DEBUG"):ToAll()
+            end
+        end
+    end
+
+    return airbasesInZone
+end
+
+function workaroundAirbaseZone(airbase)
+    local airbaseZone = airbase:GetZone()
+    if airbaseZone == nil then
+        -- Check if airbase has VEC2
+        local airbaseVec2 = airbase:GetVec2()
+
+        -- Workaround for respawned airbases (they're missing the zones)
+        if airbaseVec2 then
+            if string.startswith(airbase.AirbaseName, "FARP-") then
+                -- Most likely a FARP so this is another bug fix
+                airbase.isShip = false
+            end
+            if airbase.isShip then
+                local unit=UNIT:FindByName(airbase.AirbaseName)
+                if unit then
+                    airbaseZone = ZONE_UNIT:New(airbase.AirbaseName, unit, 2500)
+                else
+                    MESSAGE:New(string.format("AIRBASE UNIT %s NOT FOUND", airbase.AirbaseName), 3, "DEBUG"):ToAll()
+                end
+            else
+                airbaseZone = ZONE_RADIUS:New(airbase.AirbaseName, airbaseVec2, 2500)
+            end
+        else
+            UTILS.PrintTableToLog(airbase)
+        end
+    end
+    return airbaseZone
 end
 
 -- Function to combine the tables
