@@ -49,6 +49,7 @@ function COMBAT_ZONE:New(name, polygon, coalition_side)
     self.Zone = ZONE_POLYGON:NewFromPointsArray(name, polygon:GetPoints())
     self.Coalition = coalition_side or coalition.side.NEUTRAL
     self.Point = polygon:GetCentroid()
+    self.Status = COMBAT_ZONE_STATUS.NEUTRAL
     self.CentroidArea = ZONE_RADIUS:New(self.Name .. "_CentroidZone", self.Point, WZ_CONFIG.gameplay.spawnUnitsInRadius, true)
     return self
 end
@@ -74,21 +75,6 @@ function COMBAT_ZONE:AssignFARP(farp)
     return self
 end
 
-function COMBAT_ZONE:SpawnFarp()
-    if self:HasFarp() then
-        if WZ_CONFIG.debug then
-            MESSAGE:New("Spawned Farp", 2, "DEBUG"):ToAll()
-        end
-        self.Farp:ReSpawnAt(COORDINATE:NewFromVec2(self.Farp:GetVec2()))
-    end
-end
-
-function COMBAT_ZONE:ReSpawnFarp()
-    local oldFarp = self.Farp
-    self:SpawnFarp()
-    oldFarp:Destroy()
-end
-
 function COMBAT_ZONE:HasFarp()
     return self.Farp ~= nil
 end
@@ -104,46 +90,101 @@ end
 --- Spawns units in the combat zone
 --- @return table
 function COMBAT_ZONE:SpawnGroups()
-    for _, groupSettings in ipairs(WZ_CONFIG.groups.defensive) do
-        local groupName = groupSettings.name
-        local shouldSpawn = (math.random() <= groupSettings.probability)
 
-        if groupSettings.alwaysPresentOnAirBase and self.HasAirBase then
-            shouldSpawn = true
-        end
-        if shouldSpawn then
-            local countryId = (self.Coalition == coalition.side.BLUE) and country.id.USA or country.id.RUSSIA
-            local spawnedGroup = SPAWN:NewWithAlias(groupName, groupName .. "-" .. math.random(1, 10000))
-                                      :InitCoalition(self.Coalition)
-                                      :InitCountry(countryId)
-                                      :OnSpawnGroup(function(group)
-                local name = group:GetName()
-                local u = group:GetFirstUnitAlive()
-                env.info(name .. " has spawned  " .. tostring(group:GetID()) .. ' ... first unit: ' .. (u and u:GetID() or '<none>') .. ' / ' .. (u and u:GetName() or '?'))
-            end)
-                                      :SpawnInZone(self.CentroidArea, true)
-            table.insert(self.SpawnedGroups, spawnedGroup)
-        end
-    end
-    for _, staticSettings in ipairs(WZ_CONFIG.statics.defensive) do
-        local staticName = staticSettings.name
-        local shouldSpawn = (math.random() <= staticSettings.probability)
+    -- Define the template zone and find all groups and statics within it
+    local templateZone = ZONE:FindByName(WZ_CONFIG.groups.defensiveGroupCopyAreaName)
+    local templateStatics = SET_STATIC:New():FilterZones({ templateZone }):FilterOnce()
+    local allGroups = GROUP:FindAllByMatching(WZ_CONFIG.groups.defensiveGroupCopyNamePattern)
 
-        if staticSettings.alwaysPresentOnAirBase and self.HasAirBase then
-            shouldSpawn = true
-        end
 
-        if shouldSpawn then
-            local countryId = (self.Coalition == coalition.side.BLUE) and country.id.USA or country.id.RUSSIA
-            local spawn = SPAWNSTATIC:NewFromStatic(staticName, countryId):InitNamePrefix(self.Name .. '_Statics')
-            local spawnCoords = self.CentroidArea:GetRandomCoordinate():SetAltitude(1)
-            if staticSettings.isAirBase then
-                -- It's a FARP we need to register it
-                spawn:InitFARP()
+    -- Define the destination coordinate (center of the new area)
+    local destinationCoord = self.CentroidArea:GetCoordinate()
+
+    -- Function to calculate relative coordinates and spawn groups at the new location
+    local function copyAndSpawnGroups(templateGroups, destinationCoord, templateZone)
+
+        -- Iterate through all groups and check their activation status and location
+        for _, templateGroup in ipairs(templateGroups) do
+            local groupUnits = templateGroup:GetUnits()
+            for _, unit in ipairs(groupUnits) do
+                if templateZone:IsCoordinateInZone(unit:GetCoordinate()) then
+                    local groupName = templateGroup:GetName()
+                    env.info("Spawn group: " .. groupName)
+
+                    -- Get the original group position
+                    local originalCoord = templateGroup:GetCoordinate()
+
+                    -- Calculate the offset from the template zone center
+                    local offsetX = originalCoord.x - templateZone:GetCoordinate().x
+                    local offsetY = originalCoord.y - templateZone:GetCoordinate().y
+                    local offsetZ = originalCoord.z - templateZone:GetCoordinate().z
+
+                    -- Calculate new position using the offset
+                    local newX = destinationCoord.x + offsetX
+                    local newY = destinationCoord.y + offsetY
+                    local newZ = destinationCoord.z + offsetZ
+
+                    -- Create a new COORDINATE with the new position
+                    local newCoord = COORDINATE:New(newX, newY, newZ)
+                    newCoord:SetAltitude(0, true)
+
+                    local countryId = (self.Coalition == coalition.side.BLUE) and country.id.USA or country.id.RUSSIA
+
+                    local spawnedGroup = SPAWN:NewWithAlias(groupName, groupName .. "-" .. math.random(1, 10000))
+                                              :InitCoalition(self.Coalition)
+                                              :InitCountry(countryId)
+                                              :OnSpawnGroup(function(group)
+                        local name = group:GetName()
+                        env.info(name .. " has spawned  " .. tostring(group:GetID()))
+                    end)
+                                              :SpawnFromCoordinate(newCoord)
+
+                    table.insert(self.SpawnedGroups, spawnedGroup)
+
+                end
             end
-            table.insert(self.SpawnedGroups, spawn:SpawnFromCoordinate(spawnCoords, 0))
+
         end
     end
+
+    -- Function to calculate relative coordinates and spawn statics at the new location
+    local function copyAndSpawnStatics(templateStatics, destinationCoord, templateZone)
+        templateStatics:ForEachStaticInZone(function(templateStatic)
+            local staticName = templateStatic:GetName()
+            env.info("Spawn static: " .. staticName)
+            local countryId = (self.Coalition == coalition.side.BLUE) and country.id.USA or country.id.RUSSIA
+
+            -- Get the original static position
+            local originalCoord = templateStatic:GetCoordinate()
+
+            -- Calculate the offset from the template zone center
+            local offsetX = originalCoord.x - templateZone:GetCoordinate().x
+            local offsetY = originalCoord.y - templateZone:GetCoordinate().y
+            local offsetZ = originalCoord.z - templateZone:GetCoordinate().z
+
+            -- Calculate new position using the offset
+            local newX = destinationCoord.x + offsetX
+            local newY = destinationCoord.y + offsetY
+            local newZ = destinationCoord.z + offsetZ
+
+            -- Create a new COORDINATE with the new position
+            local newCoord = COORDINATE:New(newX, newY, newZ)
+
+            local spawn = SPAWNSTATIC:NewFromStatic(staticName, countryId)
+            local spawnedStatic = spawn:SpawnFromCoordinate(newCoord, nil, string.format("static_%s_%d", self.Name, math.random(1, 10000)))
+            table.insert(self.SpawnedGroups, spawnedStatic)
+        end)
+    end
+
+    -- Main logic
+    if WZ_CONFIG.debug then
+        MESSAGE:New(string.format("Spawning groups for zone %s, found %d unit groups and %d static groups", self.Name, countTableEntries(allGroups), templateStatics:CountAlive()), 10, "DEBUG"):ToAll()
+        env.info(string.format("Spawning groups for zone %s, found %d unit groups and %d static groups", self.Name, countTableEntries(allGroups), templateStatics:CountAlive()))
+    end
+
+    copyAndSpawnGroups(allGroups, destinationCoord, templateZone)
+    copyAndSpawnStatics(templateStatics, destinationCoord, templateZone)
+
     if self.FirstSpawn and self:HasGroups() then
         if WZ_CONFIG.debug then
             MESSAGE:New("CombatZone spawned units for the first time.", 2, "DEBUG"):ToAll()
@@ -232,11 +273,16 @@ end
 
 function COMBAT_ZONE:SetStatus(combatZoneStatus)
     self.Status = combatZoneStatus
-
-    if self.Status == COMBAT_ZONE_STATUS.NEUTRAL and not self:IsNeutral() then
-        self.Status = COMBAT_ZONE_STATUS.CAPTURED
-    end
     return self
+end
+
+function COMBAT_ZONE:Capture(coalitionSide)
+    self:SetCoalition(coalitionSide)
+    self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
+end
+
+function COMBAT_ZONE:Attack()
+    self:SetStatus(COMBAT_ZONE_STATUS.CAPTURING)
 end
 
 --- Updates the combat zone
@@ -256,19 +302,20 @@ function COMBAT_ZONE:Update()
     end
 
     -- Set color based on coalition and status
-    if self.Coalition == coalition.side.BLUE then
+    if self:IsBlueSide() then
         self.ZoneColor = { 0, 0, 1 }
-        self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
-    elseif self.Coalition == coalition.side.RED then
+    elseif self:IsRedSide() then
         self.ZoneColor = { 1, 0, 0 }
-        self:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
     else
         self.ZoneColor = { 0.5, 0.5, 0.5 }
     end
+
+    if self:IsBeingCaptured() and self:IsNeutral() then
+        self.ZoneColor = { 1, 1, 0 }
+    end
+
     if WZ_CONFIG.debug then
-        -- Debug message to confirm color and status change
         MESSAGE:New("Updating zone: " .. self.Name .. " with coalition: " .. tostring(self.Coalition) .. " and status: " .. self:GetReadableStatus(), 5, "DEBUG"):ToAll()
-        self:I("Updating zone: " .. self.Name .. " with coalition: " .. tostring(self.Coalition) .. " and status: " .. self:GetReadableStatus(), 5, "DEBUG"):ToAll()
     end
 
     self:UpdateAirbases()
@@ -295,7 +342,11 @@ function COMBAT_ZONE:Update()
         if WZ_CONFIG.zone.markers.enableCapturingStatus and self:IsBeingCaptured() then
             textColor = { 0, 0, 0 }
             markerColor = { 1, 1, 0 }
-            markerText = self.Name .. "\n\nIS BEING CAPTURED"
+            if self:IsNeutral() then
+                markerText = self.Name .. "\n\nIS BEING CAPTURED"
+            else
+                markerText = self.Name .. "\n\nIS UNDER ATTACK"
+            end
         end
 
         table.insert(self.MarkIds, offsetCoords:TextToAll(markerText, -1, textColor, 1.0, markerColor, .8, 10, true))
@@ -315,13 +366,6 @@ function COMBAT_ZONE:ShouldSpawnGroups()
         end
     end
 
-    return false
-end
-
-function COMBAT_ZONE:ShouldSpawnFarp()
-    if not self:HasFarp() or self.FirstSpawn then
-        return true
-    end
     return false
 end
 

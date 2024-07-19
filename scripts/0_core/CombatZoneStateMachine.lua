@@ -79,7 +79,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
     end)
 
     if WZ_CONFIG.debug then
-        MESSAGE:New(string.format("CombatZones to process: %d", countTableEntries(filteredZones)) , 5, "DEBUG"):ToAll()
+        MESSAGE:New(string.format("CombatZones to process: %d", countTableEntries(filteredZones)), 5, "DEBUG"):ToAll()
     end
     for _, combatZone in ipairs(filteredZones) do
         local targetZone = combatZone
@@ -96,9 +96,9 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                 capturableZone.targetZone = targetZone
             else
                 if WZ_CONFIG.debug then
-                    MESSAGE:New("Creating capturable zone" , 5, "DEBUG"):ToAll()
+                    MESSAGE:New("Creating capturable zone", 5, "DEBUG"):ToAll()
                 end
-                self.CapturableCombatZones[targetZoneKey] = ZONE_CAPTURE_COALITION:New(targetZone.Zone, targetZone.Coalition, {Unit.Category.AIRPLANE, Unit.Category.HELICOPTER, Unit.Category.GROUND_UNIT})
+                self.CapturableCombatZones[targetZoneKey] = ZONE_CAPTURE_COALITION:New(targetZone.Zone, targetZone.Coalition, { Unit.Category.AIRPLANE, Unit.Category.HELICOPTER, Unit.Category.GROUND_UNIT })
                 capturableZone = self.CapturableCombatZones[targetZoneKey]
                 capturableZone.stateMachine = self
                 capturableZone.targetZone = targetZone
@@ -106,14 +106,14 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                 function capturableZone:OnEnterAttacked(from, event, to)
                     local Coalition = self:GetCoalition()
                     if WZ_CONFIG.debug then
-                        MESSAGE:New("OnEnterAttacked: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition , 5, "DEBUG"):ToAll()
+                        MESSAGE:New("OnEnterAttacked: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition, 5, "DEBUG"):ToAll()
                     end
                     if from ~= to then
-                        self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURING)
+                        self.targetZone:Attack()
                         if Coalition == coalition.side.BLUE then
-                            self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "%s is under attack by the USA, defend it!", self:GetZoneName() ), MESSAGE.Type.Information )
+                            self.stateMachine.HeadQuarters.red:MessageTypeToCoalition(string.format("%s is under attack by the USA, defend it!", self:GetZoneName()), MESSAGE.Type.Information)
                         elseif Coalition == coalition.side.RED then
-                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "%s is under attack by Russia, defend it!", self:GetZoneName() ), MESSAGE.Type.Information )
+                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition(string.format("%s is under attack by Russia, defend it!", self:GetZoneName()), MESSAGE.Type.Information)
                         end
                     end
                     self.targetZone:Update()
@@ -121,9 +121,10 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                 function capturableZone:OnEnterGuarded(from, event, to)
                     local Coalition = self:GetCoalition()
                     if WZ_CONFIG.debug then
-                        MESSAGE:New("OnEnterGuarded: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition , 5, "DEBUG"):ToAll()
+                        MESSAGE:New("OnEnterGuarded: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition, 5, "DEBUG"):ToAll()
                     end
                     if from ~= to then
+                        self.targetZone:Capture(Coalition)
                         self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
                     end
                     -- Update all zones
@@ -133,15 +134,11 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                 function capturableZone:OnEnterEmpty(from, event, to)
                     local Coalition = self:GetCoalition()
                     if WZ_CONFIG.debug then
-                        MESSAGE:New("OnEnterEmpty: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition , 5, "DEBUG"):ToAll()
+                        MESSAGE:New("OnEnterEmpty: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition, 5, "DEBUG"):ToAll()
                     end
 
                     if from ~= to then
-                        if Coalition ~= coalition.side.NEUTRAL then
-                            self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
-                        else
-                            self.targetZone:SetStatus(COMBAT_ZONE_STATUS.NEUTRAL)
-                        end
+                        self.targetZone:Capture(Coalition)
                     end
                     self.targetZone:Update()
                 end
@@ -150,19 +147,19 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                     if Coalition ~= self.targetZone.Coalition then
                         self.targetZone:SetCoalition(Coalition)
                         if WZ_CONFIG.debug then
-                            MESSAGE:New("OnEnterCaptured: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition , 5, "DEBUG"):ToAll()
+                            MESSAGE:New("OnEnterCaptured: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition, 5, "DEBUG"):ToAll()
                         end
 
-                        self.targetZone.SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
+                        self.targetZone:Capture(Coalition)
 
                         if Coalition == coalition.side.BLUE then
-                            self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "%s is captured by the USA, we lost it!", self:GetZoneName() ), MESSAGE.Type.Information )
-                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "We captured %s, Excellent job!", self:GetZoneName() ), MESSAGE.Type.Information )
+                            self.stateMachine.HeadQuarters.red:MessageTypeToCoalition(string.format("%s is captured by the USA, we lost it!", self:GetZoneName()), MESSAGE.Type.Information)
+                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition(string.format("We captured %s, Excellent job!", self:GetZoneName()), MESSAGE.Type.Information)
                             table.insert(self.stateMachine.CombatZones.blue, self.targetZone)
                             self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.red, self.targetZone)
                         elseif Coalition == coalition.side.RED then
-                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition( string.format( "%s is captured by Russia, we lost it!", self:GetZoneName() ), MESSAGE.Type.Information )
-                            self.stateMachine.HeadQuarters.red:MessageTypeToCoalition( string.format( "We captured %s, Excellent job!", self:GetZoneName() ), MESSAGE.Type.Information )
+                            self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition(string.format("%s is captured by Russia, we lost it!", self:GetZoneName()), MESSAGE.Type.Information)
+                            self.stateMachine.HeadQuarters.red:MessageTypeToCoalition(string.format("We captured %s, Excellent job!", self:GetZoneName()), MESSAGE.Type.Information)
                             table.insert(self.stateMachine.CombatZones.red, self.targetZone)
                             self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.blue, self.targetZone)
                         else
@@ -173,7 +170,7 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                         self.stateMachine:UpdateCombatZonesStatus()
 
                         self.__DrawnLines = {}
-                        self:__Guard( 30 )
+                        self:__Guard(30)
                     end
                 end
 
@@ -188,7 +185,6 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
             for _, adjZone in ipairs(adjacentZones) do
                 local lineColor
                 local lineStyle, lineAlpha = 2, .3
-
 
                 local adjAdjZones = findAdjacentZones(adjacentZones, adjZone, WZ_CONFIG.zone.lineMaxDistance)
 
@@ -306,6 +302,14 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
     end
 end
 
+function COMBAT_ZONE_STATE_MACHINE:ShouldExpandZones(alreadyExpandedZones)
+    if WZ_CONFIG.gameplay.maxSimultaniouslyExpandedZones == 0 then
+        return true
+    end
+
+    return alreadyExpandedZones < WZ_CONFIG.gameplay.maxSimultaniouslyExpandedZones
+end
+
 function COMBAT_ZONE_STATE_MACHINE:GetWinningSide()
     if self:GetZoneCount("blue") > self:GetZoneCount("red") then
         return coalition.side.BLUE
@@ -324,37 +328,46 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAdjacentZones()
     local allZones = shuffleTable(combineTables(self.CombatZones))
     local winningSide = self:GetWinningSide()
 
+    -- TODO: Fix maxSimultaniouslyExpandedZones
+    local expandedZonesBlue = 0
+    local expandedZonesRed = 0
     for _, combatZone in ipairs(allZones) do
         if combatZone.Coalition ~= coalition.side.NEUTRAL then
             local adjacentZones = findAdjacentZones(allZones, combatZone, WZ_CONFIG.zone.lineMaxDistance)
+
             for _, adjZone in ipairs(adjacentZones) do
                 if adjZone.Coalition == coalition.side.NEUTRAL then
-                    -- Increase the probability based on some factors
-                    local probability = (combatZone.Coalition == winningSide) and WZ_CONFIG.gameplay.winningSideProbability or 0.8
-                    -- Add a base chance to ensure some captures occur
-                    probability = math.max(probability, 0.8)
+                    if self:ShouldExpandZones(expandedZonesBlue) then
+                        -- Increase the probability based on some factors
+                        local probability = (combatZone.Coalition == winningSide) and WZ_CONFIG.gameplay.winningSideExpansionProbability or 0.8
+                        -- Add a base chance to ensure some captures occur
+                        probability = math.max(probability, 0.8)
 
-                    if math.random() <= probability then
-                        -- Update the coalition of the adjacent point
-                        local newCoalition = combatZone.Coalition
-                        adjZone:SetCoalition(newCoalition)
-                        adjZone:Update()
+                        if math.random() <= probability then
+                            -- Update the coalition of the adjacent point
+                            local newCoalition = combatZone.Coalition
+                            adjZone:SetCoalition(newCoalition)
+                            adjZone:Update()
 
-                        -- Remove the adjPoint from the neutral table
-                        self:RemoveZoneFromCoalitionTable(self.CombatZones.neutral, adjZone)
+                            -- Remove the adjPoint from the neutral table
+                            self:RemoveZoneFromCoalitionTable(self.CombatZones.neutral, adjZone)
 
-                        if newCoalition == coalition.side.BLUE then
-                            addedZonesForBlueSide = addedZonesForBlueSide + 1
-                            table.insert(self.CombatZones.blue, adjZone)
-                            -- Remove from red table if it exists
-                            self:RemoveZoneFromCoalitionTable(self.CombatZones.red, adjZone)
-                        elseif newCoalition == coalition.side.RED then
-                            addedZonesForRedSide = addedZonesForRedSide + 1
-                            table.insert(self.CombatZones.red, adjZone)
-                            -- Remove from blue table if it exists
-                            self:RemoveZoneFromCoalitionTable(self.CombatZones.blue, adjZone)
+                            if newCoalition == coalition.side.BLUE then
+                                addedZonesForBlueSide = addedZonesForBlueSide + 1
+                                table.insert(self.CombatZones.blue, adjZone)
+                                -- Remove from red table if it exists
+                                self:RemoveZoneFromCoalitionTable(self.CombatZones.red, adjZone)
+                            elseif newCoalition == coalition.side.RED then
+                                addedZonesForRedSide = addedZonesForRedSide + 1
+                                table.insert(self.CombatZones.red, adjZone)
+                                -- Remove from blue table if it exists
+                                self:RemoveZoneFromCoalitionTable(self.CombatZones.blue, adjZone)
+                            end
+                            expandedZonesBlue = expandedZonesBlue + 1
                         end
                     end
+
+
                 end
             end
         end
@@ -439,7 +452,6 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessCombatZones(spacingX, spacingY)
                 local combatZone = COMBAT_ZONE:New(zoneName, polygon)
                 combatZone:AssignFARP(self:GetUnusedFarp(combatZone.Coalition))
                 combatZone:Update()
-                --combatZone:SpawnFarp()
 
                 if combatZone.Coalition == coalition.side.BLUE then
                     table.insert(self.CombatZones.blue, combatZone)
@@ -527,7 +539,6 @@ function COMBAT_ZONE_STATE_MACHINE:Begin(mapZone)
     return self
 end
 
-
 function COMBAT_ZONE_STATE_MACHINE:DrawExpandingZoneTimer()
     local x = self.MainZone.maxX + 100000
     local y = self.MainZone.maxY - 6500
@@ -584,7 +595,7 @@ function COMBAT_ZONE_STATE_MACHINE:EnableExpandingZoneTimer()
         if not machine:HasNeutralZones() then
             machine:ClearMarkers()
             if machine.__ExpandingZoneTimerScheduler ~= nil then
-                machine:F3({expandingScheduler = machine.__ExpandingZoneTimerScheduler})
+                machine:F3({ expandingScheduler = machine.__ExpandingZoneTimerScheduler })
                 scheduler:Remove()
                 machine.__ExpandingZoneTimerScheduler = nil
             end
