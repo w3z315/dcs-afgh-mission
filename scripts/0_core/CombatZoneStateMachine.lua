@@ -1,7 +1,6 @@
 ---@class COMBAT_ZONE_STATE_MACHINE
 ---@field ClassName string
 ---@field CombatZones table<table<COMBAT_ZONE>>
----@field SpawnedGroups table
 ---@field GameEnded boolean
 ---@field __CombatZoneCoalitionMap table<string, string>
 ---@field __GameUpdateScheduler number
@@ -18,7 +17,6 @@ COMBAT_ZONE_STATE_MACHINE = {
         neutral = {},
     },
     CapturableCombatZones = {},
-    SpawnedGroups = {},
     GameEnded = false,
     MainZone = {
         minX = 0,
@@ -35,6 +33,7 @@ COMBAT_ZONE_STATE_MACHINE = {
         red = nil,
     },
     Missions = {},
+    __AdjacentZonesCache = {},
     __CombatZoneCoalitionMap = {},
     __GameUpdateScheduler = nil,
     __ExpandingZonesScheduler = nil,
@@ -54,7 +53,7 @@ COMBAT_ZONE_STATE_MACHINE = {
 function COMBAT_ZONE_STATE_MACHINE:New()
     local self = BASE:Inherit(self, BASE:New())
     self.__TimeLeftUntilNextExpandingZone = WZ_CONFIG.gameplay.expandZonesEvery
-    self.__Clients = SET_CLIENT:New():FilterActive():FilterStart()
+    self.__Clients = SET_CLIENT:New():FilterActive():FilterOnce()
     return self
 end
 
@@ -81,75 +80,81 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
     if WZ_CONFIG.debug then
         MESSAGE:New(string.format("CombatZones to process: %d", countTableEntries(filteredZones)), 5, "DEBUG"):ToAll()
     end
+
     for _, combatZone in ipairs(filteredZones) do
         local targetZone = combatZone
-        local adjacentZones = findAdjacentZones(allZones, targetZone, WZ_CONFIG.zone.lineMaxDistance)
+        local targetZoneKey = targetZone:GetKeyName()
+        local adjacentZones = self.__AdjacentZonesCache[targetZoneKey]
 
-        -- Check if this point can be captured at all
+        if not adjacentZones then
+            adjacentZones = findAdjacentZones(allZones, targetZone, WZ_CONFIG.zone.lineMaxDistance)
+            self.__AdjacentZonesCache[targetZoneKey] = adjacentZones
+        end
+
         if self:CanZoneBeCaptured(targetZone, adjacentZones) then
-            local targetZoneKey = targetZone:GetKeyName()
-            -- Enable ZoneCaptureCoalition
-            local capturableZone
-            if table.contains_key(self.CapturableCombatZones, targetZoneKey) then
-                capturableZone = self.CapturableCombatZones[targetZoneKey]
-                capturableZone.stateMachine = self
-                capturableZone.targetZone = targetZone
-            else
+            local capturableZone = self.CapturableCombatZones[targetZoneKey]
+
+            if not capturableZone then
                 if WZ_CONFIG.debug then
                     MESSAGE:New("Creating capturable zone", 5, "DEBUG"):ToAll()
+                    env.info("Creating capturable zone")
                 end
-                self.CapturableCombatZones[targetZoneKey] = ZONE_CAPTURE_COALITION:New(targetZone.Zone, targetZone.Coalition, { Unit.Category.AIRPLANE, Unit.Category.HELICOPTER, Unit.Category.GROUND_UNIT })
-                capturableZone = self.CapturableCombatZones[targetZoneKey]
+                capturableZone = ZONE_CAPTURE_COALITION:New(targetZone.Zone, targetZone.Coalition, { Unit.Category.AIRPLANE, Unit.Category.HELICOPTER, Unit.Category.GROUND_UNIT })
+                self.CapturableCombatZones[targetZoneKey] = capturableZone
                 capturableZone.stateMachine = self
                 capturableZone.targetZone = targetZone
 
+                -- Define event handlers
                 function capturableZone:OnEnterAttacked(from, event, to)
-                    local Coalition = self:GetCoalition()
                     if WZ_CONFIG.debug then
-                        MESSAGE:New("OnEnterAttacked: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition, 5, "DEBUG"):ToAll()
+                        MESSAGE:New("OnEnterAttacked:" .. self.targetZone.Name .. " from: " .. from .. " to: " .. to .. " Coalition: " .. self.targetZone.Coalition, 5, "DEBUG"):ToAll()
+                        env.info("OnEnterAttacked:" .. self.targetZone.Name .. " from: " .. from .. " to: " .. to .. " Coalition: " .. self.targetZone.Coalition)
                     end
                     if from ~= to then
                         self.targetZone:Attack()
-                        if Coalition == coalition.side.BLUE then
+                        if self.targetZone.Coalition == coalition.side.BLUE then
                             self.stateMachine.HeadQuarters.red:MessageTypeToCoalition(string.format("%s is under attack by the USA, defend it!", self:GetZoneName()), MESSAGE.Type.Information)
-                        elseif Coalition == coalition.side.RED then
+                        elseif self.targetZone.Coalition == coalition.side.RED then
                             self.stateMachine.HeadQuarters.blue:MessageTypeToCoalition(string.format("%s is under attack by Russia, defend it!", self:GetZoneName()), MESSAGE.Type.Information)
                         end
                     end
                     self.targetZone:Update()
                 end
+
                 function capturableZone:OnEnterGuarded(from, event, to)
                     local Coalition = self:GetCoalition()
                     if WZ_CONFIG.debug then
-                        MESSAGE:New("OnEnterGuarded: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition, 5, "DEBUG"):ToAll()
+                        MESSAGE:New("OnEnterGuarded:" .. self.targetZone.Name .. " from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition, 5, "DEBUG"):ToAll()
+                        env.info("OnEnterGuarded:" .. self.targetZone.Name .. " from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition)
                     end
                     if from ~= to then
                         self.targetZone:Capture(Coalition)
                         self.targetZone:SetStatus(COMBAT_ZONE_STATUS.CAPTURED)
                     end
-                    -- Update all zones
                     self.stateMachine:UpdateCombatZonesStatus()
                     self.__DrawnLines = {}
                 end
+
                 function capturableZone:OnEnterEmpty(from, event, to)
                     local Coalition = self:GetCoalition()
                     if WZ_CONFIG.debug then
-                        MESSAGE:New("OnEnterEmpty: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition, 5, "DEBUG"):ToAll()
+                        MESSAGE:New("OnEnterEmpty:" .. self.targetZone.Name .. " from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition, 5, "DEBUG"):ToAll()
+                        env.info("OnEnterEmpty:" .. self.targetZone.Name .. " from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition)
                     end
-
                     if from ~= to then
                         self.targetZone:Capture(Coalition)
                     end
                     self.targetZone:Update()
                 end
+
                 function capturableZone:OnEnterCaptured(from, event, to)
                     local Coalition = self:GetCoalition()
                     if Coalition ~= self.targetZone.Coalition then
                         self.targetZone:SetCoalition(Coalition)
                         if WZ_CONFIG.debug then
-                            MESSAGE:New("OnEnterCaptured: from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition, 5, "DEBUG"):ToAll()
+                            MESSAGE:New("OnEnterCaptured:" .. self.targetZone.Name .. " from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition, 5, "DEBUG"):ToAll()
+                            env.info("OnEnterCaptured:" .. self.targetZone.Name .. " from: " .. from .. " to: " .. to .. " Coalition: " .. Coalition)
                         end
-
                         self.targetZone:Capture(Coalition)
 
                         if Coalition == coalition.side.BLUE then
@@ -163,61 +168,69 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, allZo
                             table.insert(self.stateMachine.CombatZones.red, self.targetZone)
                             self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.blue, self.targetZone)
                         else
-                            -- Remove the adjPoint from the neutral table
                             self.stateMachine:RemoveZoneFromCoalitionTable(self.stateMachine.CombatZones.neutral, self.targetZone)
                         end
-                        -- Update all zones
                         self.stateMachine:UpdateCombatZonesStatus()
-
                         self.__DrawnLines = {}
                         self:__Guard(30)
                     end
                 end
 
                 capturableZone:Start(3, 15)
+            else
+                capturableZone.stateMachine = self
+                capturableZone.targetZone = targetZone
             end
 
-            local neutralColor = { .35, .35, .35 }
-            local sameCoalitionColor = coalitionSide == coalition.side.BLUE and { 0, 0, 1 } or { 1, 0, 0 }
-            local oppositeCoalitionColor = { 1, 1, 0 }
-            local drawnOppositeLine = false
+            self:DrawLinesForZones(targetZone, adjacentZones, coalitionSide)
+        end
+    end
+end
 
-            for _, adjZone in ipairs(adjacentZones) do
-                local lineColor
-                local lineStyle, lineAlpha = 2, .3
+function COMBAT_ZONE_STATE_MACHINE:DrawLinesForZones(targetZone, adjacentZones, coalitionSide)
+    local neutralColor = { .35, .35, .35 }
+    local sameCoalitionColor = coalitionSide == coalition.side.BLUE and { 0, 0, 1 } or { 1, 0, 0 }
+    local oppositeCoalitionColor = { 1, 1, 0 }
+    local drawnOppositeLine = false
 
-                local adjAdjZones = findAdjacentZones(adjacentZones, adjZone, WZ_CONFIG.zone.lineMaxDistance)
+    for _, adjZone in ipairs(adjacentZones) do
+        local lineColor
+        local lineStyle, lineAlpha = 2, .3
+        local adjAdjZones = self.__AdjacentZonesCache[adjZone:GetKeyName()]
 
-                if self:CanZoneBeCaptured(adjZone, adjAdjZones) then
-                    if adjZone:IsNeutral() then
-                        lineColor = neutralColor
-                    elseif adjZone.Coalition == targetZone.Coalition then
-                        lineColor = sameCoalitionColor
-                    elseif not drawnOppositeLine and (not adjZone:IsNeutral() and not targetZone:IsNeutral()) then
-                        lineColor = oppositeCoalitionColor
-                        lineAlpha = 1
-                        lineStyle = 1
-                        drawnOppositeLine = true
-                    else
-                        lineColor = oppositeCoalitionColor
-                        lineAlpha = .8
-                    end
+        if not adjAdjZones then
+            adjAdjZones = findAdjacentZones(adjacentZones, adjZone, WZ_CONFIG.zone.lineMaxDistance)
+            self.__AdjacentZonesCache[adjZone:GetKeyName()] = adjAdjZones
+        end
 
-                    if lineColor then
-                        local lineKey1 = targetZone.Point.x .. "," .. targetZone.Point.y .. "->" .. adjZone.Point.x .. "," .. adjZone.Point.y
-                        local lineKey2 = adjZone.Point.x .. "," .. adjZone.Point.y .. "->" .. targetZone.Point.x .. "," .. targetZone.Point.y
+        if self:CanZoneBeCaptured(adjZone, adjAdjZones) then
+            if adjZone:IsNeutral() then
+                lineColor = neutralColor
+            elseif adjZone.Coalition == targetZone.Coalition then
+                lineColor = sameCoalitionColor
+            elseif not drawnOppositeLine and (not adjZone:IsNeutral() and not targetZone:IsNeutral()) then
+                lineColor = oppositeCoalitionColor
+                lineAlpha = 1
+                lineStyle = 1
+                drawnOppositeLine = true
+            else
+                lineColor = oppositeCoalitionColor
+                lineAlpha = .8
+            end
 
-                        if not self.__DrawnLines[lineKey1] and not self.__DrawnLines[lineKey2] then
-                            combatZone:ClearLineMarkings()
-                            local markId = COORDINATE:NewFromVec2(targetZone.Point, 0):LineToAll(COORDINATE:NewFromVec2(adjZone.Point, 0), -1, lineColor, lineAlpha, lineStyle, true)
-                            combatZone:AddToLineMarkingList(markId)
-                            self.__DrawnLines[lineKey1] = true
-                            self.__DrawnLines[lineKey2] = true
-                        end
-                    end
-                    drawnOppositeLine = false
+            if lineColor then
+                local lineKey1 = targetZone.Point.x .. "," .. targetZone.Point.y .. "->" .. adjZone.Point.x .. "," .. adjZone.Point.y
+                local lineKey2 = adjZone.Point.x .. "," .. adjZone.Point.y .. "->" .. targetZone.Point.x .. "," .. targetZone.Point.y
+
+                if not self.__DrawnLines[lineKey1] and not self.__DrawnLines[lineKey2] then
+                    targetZone:ClearLineMarkings()
+                    local markId = COORDINATE:NewFromVec2(targetZone.Point, 0):LineToAll(COORDINATE:NewFromVec2(adjZone.Point, 0), -1, lineColor, lineAlpha, lineStyle, true)
+                    targetZone:AddToLineMarkingList(markId)
+                    self.__DrawnLines[lineKey1] = true
+                    self.__DrawnLines[lineKey2] = true
                 end
             end
+            drawnOppositeLine = false
         end
     end
 end
@@ -290,24 +303,16 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
                 if combatZone:AnyUnitHasDifferentCoalition() then
                     combatZone:DestroyGroups()
                 end
-                table.insert(self.SpawnedGroups, combatZone:SpawnGroups())
                 self.__CombatZoneCoalitionMap[combatZone.Name] = combatZone.Coalition
                 combatZone:Update()
             end
         end
     end
+
     if WZ_CONFIG.debug then
         MESSAGE:New("Updated", 2, "DEBUG"):ToAll()
         MESSAGE:New(string.format("Capturable combat zones: %d", countTableEntries(self.CapturableCombatZones)), 2, "DEBUG"):ToAll()
     end
-end
-
-function COMBAT_ZONE_STATE_MACHINE:ShouldExpandZones(alreadyExpandedZones)
-    if WZ_CONFIG.gameplay.maxSimultaniouslyExpandedZones == 0 then
-        return true
-    end
-
-    return alreadyExpandedZones < WZ_CONFIG.gameplay.maxSimultaniouslyExpandedZones
 end
 
 function COMBAT_ZONE_STATE_MACHINE:GetWinningSide()
@@ -328,42 +333,41 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAdjacentZones()
     local allZones = shuffleTable(combineTables(self.CombatZones))
     local winningSide = self:GetWinningSide()
 
-    -- TODO: Fix maxSimultaniouslyExpandedZones
-    local expandedZonesBlue = 0
-    local expandedZonesRed = 0
     for _, combatZone in ipairs(allZones) do
         if combatZone.Coalition ~= coalition.side.NEUTRAL then
-            local adjacentZones = findAdjacentZones(allZones, combatZone, WZ_CONFIG.zone.lineMaxDistance)
+            local adjacentZones = findAdjacentZones(
+                    allZones,
+                    combatZone,
+                    WZ_CONFIG.zone.lineMaxDistance,
+                    WZ_CONFIG.gameplay.maxSimultaniouslyExpandedZones
+            )
 
             for _, adjZone in ipairs(adjacentZones) do
                 if adjZone.Coalition == coalition.side.NEUTRAL then
-                    if self:ShouldExpandZones(expandedZonesBlue) then
-                        -- Increase the probability based on some factors
-                        local probability = (combatZone.Coalition == winningSide) and WZ_CONFIG.gameplay.winningSideExpansionProbability or 0.8
-                        -- Add a base chance to ensure some captures occur
-                        probability = math.max(probability, 0.8)
+                    -- Increase the probability based on some factors
+                    local probability = (combatZone.Coalition == winningSide) and WZ_CONFIG.gameplay.winningSideExpansionProbability or 0.8
+                    -- Add a base chance to ensure some captures occur
+                    probability = math.max(probability, 0.8)
 
-                        if math.random() <= probability then
-                            -- Update the coalition of the adjacent point
-                            local newCoalition = combatZone.Coalition
-                            adjZone:SetCoalition(newCoalition)
-                            adjZone:Update()
+                    if math.random() <= probability then
+                        -- Update the coalition of the adjacent point
+                        local newCoalition = combatZone.Coalition
+                        adjZone:SetCoalition(newCoalition)
+                        adjZone:Update()
 
-                            -- Remove the adjPoint from the neutral table
-                            self:RemoveZoneFromCoalitionTable(self.CombatZones.neutral, adjZone)
+                        -- Remove the adjPoint from the neutral table
+                        self:RemoveZoneFromCoalitionTable(self.CombatZones.neutral, adjZone)
 
-                            if newCoalition == coalition.side.BLUE then
-                                addedZonesForBlueSide = addedZonesForBlueSide + 1
-                                table.insert(self.CombatZones.blue, adjZone)
-                                -- Remove from red table if it exists
-                                self:RemoveZoneFromCoalitionTable(self.CombatZones.red, adjZone)
-                            elseif newCoalition == coalition.side.RED then
-                                addedZonesForRedSide = addedZonesForRedSide + 1
-                                table.insert(self.CombatZones.red, adjZone)
-                                -- Remove from blue table if it exists
-                                self:RemoveZoneFromCoalitionTable(self.CombatZones.blue, adjZone)
-                            end
-                            expandedZonesBlue = expandedZonesBlue + 1
+                        if newCoalition == coalition.side.BLUE then
+                            addedZonesForBlueSide = addedZonesForBlueSide + 1
+                            table.insert(self.CombatZones.blue, adjZone)
+                            -- Remove from red table if it exists
+                            self:RemoveZoneFromCoalitionTable(self.CombatZones.red, adjZone)
+                        elseif newCoalition == coalition.side.RED then
+                            addedZonesForRedSide = addedZonesForRedSide + 1
+                            table.insert(self.CombatZones.red, adjZone)
+                            -- Remove from blue table if it exists
+                            self:RemoveZoneFromCoalitionTable(self.CombatZones.blue, adjZone)
                         end
                     end
 
@@ -399,10 +403,12 @@ end
 
 -- Checks if clients need updates
 function COMBAT_ZONE_STATE_MACHINE:UpdateClients()
+    self.__Clients = SET_CLIENT:New():FilterActive():FilterOnce()
     self.__Clients:ForEachClient(function(client)
         if client:GetGroup() then
             local group = client:GetGroup()
             if group:IsAlive() and not table.contains(self.__JoinedPlayers, client:GetPlayerName()) then
+                self:I(client:GetPlayerName())
                 MESSAGE:New(WZ_CONFIG.messages.missionIntro, 30, "BRIEFING"):ToClient(client)
                 if WZ_CONFIG.audio.missionIntroSound then
                     USERSOUND:New(WZ_CONFIG.audio.missionIntroSoundFile):ToClient(client)
@@ -634,7 +640,6 @@ function COMBAT_ZONE_STATE_MACHINE:Stop()
         neutral = {},
     }
     self.Missions = {}
-    self.SpawnedGroups = {}
     self.GameEnded = false
     self.MainZone = {
         minX = 0,
@@ -651,6 +656,7 @@ function COMBAT_ZONE_STATE_MACHINE:Stop()
         red = nil,
     }
     self.CapturableCombatZones = {}
+    self.__AdjacentZonesCache = {}
     self.__CombatZoneCoalitionMap = {}
     self.__GameUpdateScheduler = nil
     self.__ExpandingZonesScheduler = nil

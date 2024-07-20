@@ -1,4 +1,4 @@
-function findAdjacentZones(points, targetPoint, maxDistance)
+function findAdjacentZones(points, targetPoint, maxDistance, maxAdjacentZones)
     local adjacentPoints = {}
     for _, point in ipairs(points) do
         if point.Name ~= targetPoint.Name then
@@ -6,6 +6,9 @@ function findAdjacentZones(points, targetPoint, maxDistance)
             local distance = calculateDistanceBetweenPoints(targetPoint.Point, point.Point)
             if distance <= maxDistance then
                 table.insert(adjacentPoints, point)
+                if maxAdjacentZones and #adjacentPoints > maxAdjacentZones then
+                    return adjacentPoints
+                end
             end
         end
     end

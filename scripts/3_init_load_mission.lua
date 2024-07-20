@@ -1,6 +1,9 @@
 WZ_CONFIG = WZ_CONFIG or {}
 BASE:TraceOn(WZ_CONFIG.debug)
 
+
+
+
 -- Define the main zone
 local mainZone = POLYGON:FindOnMap(WZ_CONFIG.zone.name)
 
@@ -14,6 +17,21 @@ if WZ_CONFIG.gameplay.enableExpandingZones then
         WZ_stateMachine:EnableExpandingZoneTimer()
     end
 end
+
+-- Pilot destruction event handler
+local PilotDestructionHandler = EVENTHANDLER:New()
+PilotDestructionHandler:HandleEvent(EVENTS.LandingAfterEjection)
+
+function PilotDestructionHandler:OnEventLandingAfterEjection(EventData)
+    local spawnedObject = EventData.IniDCSUnit
+    self:I(spawnedObject)
+    if spawnedObject then
+        spawnedObject:destroy()
+        self:E("Pilot ejected, landed and destroyed: " .. EventData.IniDCSUnitName)
+    end
+    self:E("Pilot ejected and landed.")
+end
+
 
 
 if WZ_CONFIG.debug then
