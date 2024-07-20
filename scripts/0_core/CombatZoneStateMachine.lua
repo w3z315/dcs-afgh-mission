@@ -303,6 +303,7 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateAllZones()
                 if combatZone:AnyUnitHasDifferentCoalition() then
                     combatZone:DestroyGroups()
                 end
+                combatZone:SpawnGroups()
                 self.__CombatZoneCoalitionMap[combatZone.Name] = combatZone.Coalition
                 combatZone:Update()
             end

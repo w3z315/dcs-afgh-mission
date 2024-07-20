@@ -1,6 +1,6 @@
 if not WZ_CONFIG then
     WZ_CONFIG = {
-        debug = true, -- Show debug messages
+        debug = false, -- Show debug messages
         zone = {
             name = "Zone_Polygon_Area", -- The name of the polygon map marking in which to generate the combat zones
             subZoneRadiusX = 40000,
