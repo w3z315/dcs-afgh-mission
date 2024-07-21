@@ -1,5 +1,5 @@
 WZ_CONFIG = WZ_CONFIG or {}
-BASE:TraceOn(WZ_CONFIG.debug)
+BASE:TraceOnOff(WZ_CONFIG.debug)
 
 
 
