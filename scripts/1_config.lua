@@ -3,11 +3,11 @@ if not WZ_CONFIG then
         debug = false, -- Show debug messages
         zone = {
             name = "Zone_Polygon_Area", -- The name of the polygon map marking in which to generate the combat zones
-            subZoneRadiusX = 40000,
-            subZoneRadiusY = 40000,
+            subZoneRadiusX = 20000,
+            subZoneRadiusY = 20000,
             spacingX = 500,
             spacingY = 500,
-            lineMaxDistance = 83000, -- Max distance between two zones to count as adjacent
+            lineMaxDistance = 100000, -- Max distance between two zones to count as adjacent
             yOffset = 0, -- Move all markers up and down
             xOffset = 0, -- Move all markers left and right
             markers = {

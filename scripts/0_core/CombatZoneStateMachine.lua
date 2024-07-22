@@ -72,10 +72,9 @@ function COMBAT_ZONE_STATE_MACHINE:UpdateCombatZonesStatus()
     end
 end
 
-function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, zones)
-    local filteredZones = self:FilterZonesByCoalition(zones, coalitionSide)
 
-    for _, combatZone in ipairs(filteredZones) do
+function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, zones)
+    for _, combatZone in ipairs(zones) do
         local targetZone = combatZone
         local targetZoneKey = targetZone:GetKeyName()
         local adjacentZones = self.__AdjacentZonesCache[targetZoneKey]
@@ -85,16 +84,13 @@ function COMBAT_ZONE_STATE_MACHINE:ProcessZonesForCoalition(coalitionSide, zones
             self.__AdjacentZonesCache[targetZoneKey] = adjacentZones
         end
 
-        if self:CanZoneBeCaptured(targetZone, adjacentZones) then
-            local capturableZone = self.CapturableCombatZones[targetZoneKey]
+        local capturableZone = self.CapturableCombatZones[targetZone:GetKeyName()]
 
-            if not capturableZone then
-                capturableZone = self:CreateCapturableZone(targetZone, adjacentZones, coalitionSide)
-                self.CapturableCombatZones[targetZoneKey] = capturableZone
-            end
-
-            self:DrawLinesForZones(targetZone, adjacentZones, coalitionSide)
+        if capturableZone == nil then
+            capturableZone = self:CreateCapturableZone(targetZone)
+            self.CapturableCombatZones[targetZone:GetKeyName()] = capturableZone
         end
+        self:DrawLinesForZones(targetZone, self.__AdjacentZonesCache[targetZone:GetKeyName()], coalitionSide)
     end
 end
 
@@ -108,12 +104,13 @@ function COMBAT_ZONE_STATE_MACHINE:FindAdjacentZones(zones, targetZone, maxDista
     return findAdjacentZones(zones, targetZone, maxDistance)
 end
 
-function COMBAT_ZONE_STATE_MACHINE:CreateCapturableZone(targetZone, adjacentZones, coalition)
+function COMBAT_ZONE_STATE_MACHINE:CreateCapturableZone(targetZone)
     local capturableZone = ZONE_CAPTURE_COALITION:New(targetZone.Zone, targetZone.Coalition, { Unit.Category.AIRPLANE, Unit.Category.HELICOPTER, Unit.Category.GROUND_UNIT })
     capturableZone.stateMachine = self
     capturableZone.targetZone = targetZone
     capturableZone:DefineEventHandlers()
     capturableZone:Start(3, 15)
+    self:I("Created capturable zone " .. capturableZone.targetZone:GetKeyName())
     return capturableZone
 end
 
